@@ -1,0 +1,125 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "2250002",
+        "municipality": "横浜市青葉区",
+        "name": "美しが丘"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.540, 35.580],
+            [139.552, 35.580],
+            [139.552, 35.590],
+            [139.540, 35.590],
+            [139.540, 35.580]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "2270062",
+        "municipality": "横浜市青葉区",
+        "name": "青葉台"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.530, 35.545],
+            [139.542, 35.545],
+            [139.542, 35.555],
+            [139.530, 35.555],
+            [139.530, 35.545]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "2260013",
+        "municipality": "横浜市緑区",
+        "name": "寺山町"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.535, 35.510],
+            [139.547, 35.510],
+            [139.547, 35.520],
+            [139.535, 35.520],
+            [139.535, 35.510]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "2521108",
+        "municipality": "綾瀬市",
+        "name": "深谷上"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.410, 35.440],
+            [139.422, 35.440],
+            [139.422, 35.450],
+            [139.410, 35.450],
+            [139.410, 35.440]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "2520028",
+        "municipality": "座間市",
+        "name": "入谷東"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.390, 35.495],
+            [139.402, 35.495],
+            [139.402, 35.505],
+            [139.390, 35.505],
+            [139.390, 35.495]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "zip_code": "1940013",
+        "municipality": "町田市",
+        "name": "原町田"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [139.445, 35.540],
+            [139.457, 35.540],
+            [139.457, 35.550],
+            [139.445, 35.550],
+            [139.445, 35.540]
+          ]
+        ]
+      }
+    }
+  ]
+}
