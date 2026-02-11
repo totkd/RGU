@@ -221,7 +221,12 @@ def parse_polygon_coords(poly_elem: ET.Element) -> Optional[List[List[List[float
     return rings
 
 
-def collect_town_areas_from_kmz(kmz_zip_path: Path, target_munis: Set[str]) -> Dict[str, TownArea]:
+def collect_town_areas_from_kmz(
+    kmz_zip_path: Path,
+    target_munis: Set[str],
+    area_prefix: str = "KA14",
+    default_pref_name: str = "神奈川県",
+) -> Dict[str, TownArea]:
     kml_bytes = read_inner_kmz_kml_bytes(kmz_zip_path)
     root = ET.fromstring(kml_bytes)
 
@@ -232,7 +237,7 @@ def collect_town_areas_from_kmz(kmz_zip_path: Path, target_munis: Set[str]) -> D
         municipality = canonical_municipality(attrs.get("CITY_NAME", ""))
         town_name = str(attrs.get("S_NAME", "")).strip()
         keycode1 = str(attrs.get("KEYCODE1", "")).strip()
-        pref_name = str(attrs.get("PREF_NAME", "")).strip() or "神奈川県"
+        pref_name = str(attrs.get("PREF_NAME", "")).strip() or default_pref_name
 
         if municipality not in target_munis:
             continue
@@ -247,7 +252,7 @@ def collect_town_areas_from_kmz(kmz_zip_path: Path, target_munis: Set[str]) -> D
         if not polygon_coords:
             continue
 
-        area_id = f"KA14-{keycode1}"
+        area_id = f"{area_prefix}-{keycode1}"
         if area_id not in grouped:
             grouped[area_id] = TownArea(
                 area_id=area_id,
@@ -291,6 +296,7 @@ def build_town_features(
     town_to_depots: Dict[Tuple[str, str], Set[str]],
     muni_to_single_depot: Dict[str, str],
     muni_to_depots: Dict[str, Set[str]],
+    source_tag: str = "e-stat-r2ka14-kmz",
 ) -> List[dict]:
     features = []
     for area_id in sorted(areas):
@@ -316,7 +322,7 @@ def build_town_features(
                 "town_name": area.town_name,
                 "pref_name": area.pref_name,
                 "town_code": area.keycode1,
-                "source": "e-stat-r2ka14-kmz",
+                "source": source_tag,
                 "depot_code": depot_code,
                 "depot_name": DEPOT_NAMES.get(depot_code, ""),
                 "assign_status": status,
@@ -326,6 +332,37 @@ def build_town_features(
         features.append(feature)
     return features
 
+
+def ensure_area_prefix(value: str, prefix: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return raw if raw.startswith(prefix + "-") else f"{prefix}-{raw}"
+
+
+def load_tokyo_town_features_from_kmz(
+    tokyo_kmz_zip_path: Path,
+    target_munis: Set[str],
+    town_to_depots: Dict[Tuple[str, str], Set[str]],
+    muni_to_single_depot: Dict[str, str],
+    muni_to_depots: Dict[str, Set[str]],
+) -> List[dict]:
+    if not tokyo_kmz_zip_path.exists():
+        return []
+
+    areas = collect_town_areas_from_kmz(
+        tokyo_kmz_zip_path,
+        target_munis,
+        area_prefix="TK13",
+        default_pref_name="東京都",
+    )
+    return build_town_features(
+        areas,
+        town_to_depots,
+        muni_to_single_depot,
+        muni_to_depots,
+        source_tag="e-stat-r2ka13-kmz",
+    )
 
 
 def load_tokyo_town_features(
@@ -352,7 +389,8 @@ def load_tokyo_town_features(
         town_name = str(props.get("town_name") or props.get("S_NAME") or props.get("name") or "").strip()
         area_id = str(props.get("area_id") or props.get("town_code") or props.get("code") or "").strip()
         if not area_id:
-            area_id = f"TK13-{len(out) + 1:05d}"
+            area_id = f"{len(out) + 1:05d}"
+        area_id = ensure_area_prefix(area_id, "TK13")
 
         depot_code, status = pick_depot_for_town(
             municipality=municipality,
@@ -365,12 +403,12 @@ def load_tokyo_town_features(
             {
                 "type": "Feature",
                 "properties": {
-                    "area_id": f"TK13-{area_id}",
+                    "area_id": area_id,
                     "area_name": f"{municipality}{town_name}",
                     "municipality": municipality,
                     "town_name": town_name,
                     "pref_name": "東京都",
-                    "town_code": area_id,
+                    "town_code": area_id.split("-", 1)[-1],
                     "source": "tokyo-town-geojson",
                     "depot_code": depot_code,
                     "depot_name": DEPOT_NAMES.get(depot_code, ""),
@@ -446,7 +484,7 @@ def main() -> None:
     parser.add_argument(
         "--tokyo-town-geojson",
         default="data/tokyo/machida_towns.geojson",
-        help="Optional town-level GeoJSON for Tokyo (e.g. Machida).",
+        help="Optional Tokyo town-level input. Supports GeoJSON or e-Stat KMZ wrapper ZIP (e.g. A002005212020DDKWC13.zip).",
     )
     parser.add_argument(
         "--n03-fallback",
@@ -475,13 +513,22 @@ def main() -> None:
     town_areas = collect_town_areas_from_kmz(kmz_zip_path, kanagawa_target_munis)
     kanagawa_town_features = build_town_features(town_areas, town_to_depots, muni_to_single_depot, muni_to_depots)
 
-    tokyo_town_features = load_tokyo_town_features(
-        tokyo_town_geojson_path,
-        tokyo_target_munis,
-        town_to_depots,
-        muni_to_single_depot,
-        muni_to_depots,
-    )
+    if tokyo_town_geojson_path.suffix.lower() == ".zip":
+        tokyo_town_features = load_tokyo_town_features_from_kmz(
+            tokyo_town_geojson_path,
+            tokyo_target_munis,
+            town_to_depots,
+            muni_to_single_depot,
+            muni_to_depots,
+        )
+    else:
+        tokyo_town_features = load_tokyo_town_features(
+            tokyo_town_geojson_path,
+            tokyo_target_munis,
+            town_to_depots,
+            muni_to_single_depot,
+            muni_to_depots,
+        )
 
     # 町田市の町丁目データが無い場合のみ、N03境界でフォールバックする。
     fallback_features = []

@@ -66,21 +66,29 @@ python3 -m http.server 8000
 ## data 配下の整理
 
 - 旧サンプルGeoJSONは `data/archive/` に移動。
-- 東京（町田市）町丁目データを差し込む場合は `data/tokyo/machida_towns.geojson` を配置。
+- 東京（町田市）町丁目データは `data/tokyo/machida_towns.geojson` または e-Stat ZIP を直接指定。
 
 ## 細粒度データ再生成
 
 神奈川の町丁目KMZと `asis.csv` から細粒度ポリゴンを再生成できます。
-必要に応じて、町田市の町丁目GeoJSONを追加投入してください。
+町田市は、GeoJSONまたは東京都のe-Stat ZIPをそのまま投入できます。
 
 ```bash
 python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --asis /Users/tomoki/src/RGU/asis.csv \
   --kanagawa-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC14.zip \
-  --tokyo-town-geojson /Users/tomoki/src/RGU/data/tokyo/machida_towns.geojson \
+  --tokyo-town-geojson /Users/tomoki/Downloads/A002005212020DDKWC13.zip \
   --baseline /Users/tomoki/src/RGU/data/asis_admin_assignments.csv \
   --n03-fallback /Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson \
   --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
 ```
 
-`--tokyo-town-geojson` が未配置の場合は、町田市のみ N03 境界（市単位）へフォールバックします。
+`--tokyo-town-geojson` は `.geojson` と `.zip` の両方を受け付けます。
+未配置の場合は、町田市のみ N03 境界（市単位）へフォールバックします。
+
+### 東京都町域データの入手先（e-Stat）
+
+1. e-Stat 境界データダウンロードを開く  
+   https://www.e-stat.go.jp/gis/statmap-search/boundary_data
+2. 「小地域（町丁・字等）」を選び、都道府県で「東京都」を指定してダウンロード
+3. 取得したZIP（例: `A002005212020DDKWC13.zip`）を `--tokyo-town-geojson` に指定
