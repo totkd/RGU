@@ -1,6 +1,6 @@
 const DEPOTS = {
   SGM: { name: "相模原デポ SGM", color: "#2e7d32" },
-  FUJ: { name: "藤沢デポ FUJ", color: "#1e4f8a" },
+  FUJ: { name: "藤沢デポ FUJ", color: "#2d6cdf" },
   YOK: { name: "横浜港北デポ YOK", color: "#b71c1c" },
 };
 
@@ -147,7 +147,7 @@ const MUNICIPALITY_KEYS = ["municipality", "city", "ward", "自治体", "市区�
 const state = {
   map: null,
   baseLayers: new Map(),
-  activeBasemapId: "gsi_std",
+  activeBasemapId: "esri_street",
   geoLayer: null,
   areaToLayers: new Map(),
   areaMeta: new Map(),
@@ -161,6 +161,7 @@ const state = {
   loadedGeoData: null,
   asisAreaLabelByTown: new Map(),
   asisDefaultAreaLabelByMunicipality: new Map(),
+  asisPostalCodesByTown: new Map(),
   depotMarkerLayer: null,
 };
 
@@ -207,7 +208,7 @@ function initMap() {
     state.baseLayers.set(id, L.tileLayer(cfg.url, cfg.options));
   });
 
-  setBasemap("gsi_std");
+  setBasemap("esri_street");
 }
 
 function setupEventHandlers() {
@@ -326,15 +327,15 @@ function initDepotMarkers() {
       icon: L.divIcon({
         className: "",
         html: `<span class="depot-pin" style="background:${depot.color}"></span>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7],
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
       }),
       title: `${site.code} ${site.address}`,
     });
 
     marker.bindTooltip(`${site.code} ${depot.name}<br>${site.address}`, {
       direction: "top",
-      offset: [0, -10],
+      offset: [0, -14],
       opacity: 0.95,
     });
 
@@ -404,6 +405,7 @@ function buildAsisAreaLabelMaps(csvText) {
 
   const townCounter = new Map();
   const municipalityCounter = new Map();
+  const postalByTown = new Map();
 
   for (let i = 1; i < rows.length; i += 1) {
     const row = rows[i];
@@ -429,8 +431,13 @@ function buildAsisAreaLabelMaps(csvText) {
     }
 
     const town = canonicalTownName(pickCsvValue(row, indexByHeader, ["町", "town", "S_NAME"]));
+    const postalCodes = collectPostalCodes(
+      pickCsvValue(row, indexByHeader, ["郵便番号", "postal_code", "zip_code", "zipcode", "zip"])
+    );
     if (town) {
-      addCount(townCounter, `${municipality}|${town}`, areaLabel);
+      const key = `${municipality}|${town}`;
+      addCount(townCounter, key, areaLabel);
+      addPostalCodes(postalByTown, key, postalCodes);
     } else {
       addCount(municipalityCounter, municipality, areaLabel);
     }
@@ -438,6 +445,7 @@ function buildAsisAreaLabelMaps(csvText) {
 
   state.asisAreaLabelByTown = collapseCountMap(townCounter);
   state.asisDefaultAreaLabelByMunicipality = collapseCountMap(municipalityCounter);
+  state.asisPostalCodesByTown = collapsePostalCodeMap(postalByTown);
 }
 
 function parseCsvRows(text) {
@@ -529,6 +537,21 @@ function addCount(container, key, label) {
   counter.set(label, (counter.get(label) || 0) + 1);
 }
 
+function addPostalCodes(container, key, codes) {
+  if (!key || !Array.isArray(codes) || codes.length === 0) {
+    return;
+  }
+  if (!container.has(key)) {
+    container.set(key, new Set());
+  }
+  const codeSet = container.get(key);
+  codes.forEach((code) => {
+    if (code) {
+      codeSet.add(code);
+    }
+  });
+}
+
 function collapseCountMap(counterMap) {
   const out = new Map();
   counterMap.forEach((counter, key) => {
@@ -545,18 +568,66 @@ function collapseCountMap(counterMap) {
   return out;
 }
 
+function collapsePostalCodeMap(codeMap) {
+  const out = new Map();
+  codeMap.forEach((codeSet, key) => {
+    const values = [...codeSet].sort((a, b) => a.localeCompare(b, "ja"));
+    if (values.length > 0) {
+      out.set(key, values);
+    }
+  });
+  return out;
+}
+
+function collectPostalCodes(raw) {
+  const input = String(raw || "").trim();
+  if (!input) {
+    return [];
+  }
+  const codes = [];
+  const re = /(\d{3})-?(\d{4})/g;
+  let m = re.exec(input);
+  while (m) {
+    const code = `${m[1]}${m[2]}`;
+    if (code.length === 7) {
+      codes.push(code);
+    }
+    m = re.exec(input);
+  }
+
+  if (codes.length > 0) {
+    return [...new Set(codes)];
+  }
+
+  const normalized = normalizeZip(input);
+  if (normalized.length === 7) {
+    return [normalized];
+  }
+  return [];
+}
+
 function applyAsisAreaLabelsToLoadedAreas() {
   state.areaMeta.forEach((meta, areaId) => {
-    if (meta.dispatchAreaLabel) {
-      return;
+    let changed = false;
+    if (!meta.dispatchAreaLabel) {
+      const label = lookupDispatchAreaLabel(meta.municipality, meta.townName);
+      if (label) {
+        meta.dispatchAreaLabel = label;
+        changed = true;
+      }
     }
 
-    const label = lookupDispatchAreaLabel(meta.municipality, meta.townName);
-    if (!label) {
-      return;
+    if (!meta.postalCodes || meta.postalCodes.length === 0) {
+      const codes = lookupPostalCodes(meta.municipality, meta.townName);
+      if (codes.length > 0) {
+        meta.postalCodes = codes;
+        changed = true;
+      }
     }
 
-    meta.dispatchAreaLabel = label;
+    if (!changed) {
+      return;
+    }
     const layers = state.areaToLayers.get(areaId) || [];
     layers.forEach((layer) => {
       if (layer.getTooltip()) {
@@ -619,6 +690,7 @@ function loadGeoJson(data) {
           municipality,
           townName,
           dispatchAreaLabel: getDispatchAreaLabel(props, municipality, townName),
+          postalCodes: getPostalCodes(props, municipality, townName, areaId),
           raw: props,
         });
       }
@@ -633,7 +705,10 @@ function loadGeoJson(data) {
         direction: "top",
         opacity: 0.94,
       });
-      layer.on("mouseout", () => layer.closeTooltip());
+      layer.on("mouseout", () => {
+        layer.closeTooltip();
+        layer.closePopup();
+      });
       layer.on("remove", () => layer.closeTooltip());
     },
   }).addTo(state.map);
@@ -766,6 +841,24 @@ function getDispatchAreaLabel(props, municipality, townName) {
   return lookupDispatchAreaLabel(municipality, townName);
 }
 
+function getPostalCodes(props, municipality, townName, areaId) {
+  const fromProps = ZIP_KEYS.flatMap((key) => collectPostalCodes(props[key]));
+  if (fromProps.length > 0) {
+    return [...new Set(fromProps)];
+  }
+
+  const fromAsis = lookupPostalCodes(municipality, townName);
+  if (fromAsis.length > 0) {
+    return fromAsis;
+  }
+
+  const fromAreaId = collectPostalCodes(areaId);
+  if (fromAreaId.length > 0) {
+    return fromAreaId;
+  }
+  return [];
+}
+
 function lookupDispatchAreaLabel(municipality, townName) {
   const muni = canonicalMunicipality(municipality);
   if (!muni) {
@@ -781,6 +874,18 @@ function lookupDispatchAreaLabel(municipality, townName) {
   }
 
   return state.asisDefaultAreaLabelByMunicipality.get(muni) || "";
+}
+
+function lookupPostalCodes(municipality, townName) {
+  const muni = canonicalMunicipality(municipality);
+  if (!muni) {
+    return [];
+  }
+  const town = canonicalTownName(townName);
+  if (!town) {
+    return [];
+  }
+  return state.asisPostalCodesByTown.get(`${muni}|${town}`) || [];
 }
 
 function canonicalMunicipality(value) {
@@ -806,6 +911,23 @@ function normalizeZip(value) {
     return digits.slice(0, 7);
   }
   return digits;
+}
+
+function formatPostalCode(zip) {
+  const digits = normalizeZip(zip);
+  if (digits.length !== 7) {
+    return "";
+  }
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}`;
+}
+
+function formatPostalCodes(codes) {
+  const values = Array.isArray(codes) ? codes : [];
+  const formatted = values.map((value) => formatPostalCode(value)).filter(Boolean);
+  if (formatted.length === 0) {
+    return "-";
+  }
+  return [...new Set(formatted)].join(" / ");
 }
 
 function extractDepot(props) {
@@ -1317,23 +1439,26 @@ function renderSelected() {
   }
 
   areaIds.forEach((areaId) => {
+    const meta = state.areaMeta.get(areaId);
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "chip";
-    chip.textContent = formatAreaLabel(areaId);
+    const title = document.createElement("span");
+    title.className = "chip-title";
+    title.textContent = meta?.name || formatAreaIdForDisplay(areaId);
+
+    const group = document.createElement("span");
+    group.className = "chip-sub";
+    group.textContent = meta?.dispatchAreaLabel || meta?.municipality || "-";
+
+    const postal = document.createElement("span");
+    postal.className = "chip-meta";
+    postal.textContent = `〒${formatPostalCodes(meta?.postalCodes)}`;
+
+    chip.append(title, group, postal);
     chip.addEventListener("click", () => toggleAreaSelection(areaId));
     el.selectedAreas.append(chip);
   });
-}
-
-function formatAreaLabel(areaId) {
-  const meta = state.areaMeta.get(areaId);
-  if (!meta || !meta.name || meta.name === areaId) {
-    return formatAreaIdForDisplay(areaId);
-  }
-
-  const group = meta.dispatchAreaLabel ? ` / ${meta.dispatchAreaLabel}` : "";
-  return `${meta.name}${group} [${formatAreaIdForDisplay(areaId)}]`;
 }
 
 function renderStats() {
