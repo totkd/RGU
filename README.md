@@ -1,82 +1,107 @@
-# 配送エリア調整ツール（行政区画版）
+# AreaKit
 
-神奈川県・東京都町田市の配送担当を、行政区画ポリゴン単位で地図上から調整するためのWebツールです。
+[![Deploy](https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel)](https://rgu-chi.vercel.app/)
+![App](https://img.shields.io/badge/App-AreaKit-111827)
+![Map](https://img.shields.io/badge/Map-Leaflet-199900)
+![Data](https://img.shields.io/badge/Data-GeoJSON%20%2B%20CSV-2563eb)
 
-## できること
+配送エリアを地図上で調整するための運用ツールです。  
+神奈川県 + 東京都町田市の町域ポリゴンを表示し、`SGM / FUJ / YOK` の担当割当を編集してCSVで出力できます。
 
-- 起動時に `data/asis_fine_polygons.geojson` を自動読み込み
-- ポリゴンをクリック選択して `SGM / FUJ / YOK` に割当
-- クリック時に「対応エリア」（`asis.csv` 由来）をポップアップ表示
-- ベースマップ切替（地理院標準/地理院淡色/地理院写真/OSM/CARTO/Esri）
-- サイドバーの表示/非表示切替
-- SGM/FUJ/YOK 拠点ピンを固定表示
-- 自治体フィルタ、エリアID/名称ジャンプ
-- 運用対象外エリアをグレーアウトし、選択・割当を禁止
-- 割当結果のCSV出力
+---
 
-## 起動方法
+## 一般向けガイド
 
-```bash
-cd /Users/tomoki/src/RGU
-python3 -m http.server 8000
-```
+### できること
+- 町域ポリゴンをクリックして複数選択
+- 選択町域を `SGM / FUJ / YOK` に一括割当
+- `Undo / Redo`（選択状態の履歴）
+- `All Reset`（初期割当へ復元 + 選択解除）
+- 拠点ピン（SGM/FUJ/YOK）を固定表示
+- `Download CSV` で割当結果を出力
 
-ブラウザで `http://localhost:8000` を開く。
-起動すると、`data/asis_fine_polygons.geojson` が自動で地図に反映されます。
+### 操作フロー
+1. `Map Tiles` で背景地図を選ぶ
+2. 地図上の町域をクリックして選択
+3. `Zone Select` でデポを割り当て
+4. 必要に応じて `Undo / Redo` で調整
+5. `Download CSV` で結果を保存
 
-## すぐ使うファイル（運用）
+### 画面の見方
+- `Map Tiles`: 背景地図の切替
+- `Zone Select`: 選択件数・割当操作・Undo/Redo・All Reset
+- `Stats`: 全体件数/割当済み/未割当/デポ別件数
+- `Selected Zones`: 現在選択中の町域一覧
 
-- 行政区画GeoJSON: `/Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson`
-- 初期割当CSV: `/Users/tomoki/src/RGU/data/asis_admin_assignments.csv`
-- 細粒度ポリゴン（町丁目ベース, asis反映済み）: `/Users/tomoki/src/RGU/data/asis_fine_polygons.geojson`
-
-運用では `asis_fine_polygons.geojson` をデフォルトデータとして使います。
-
-## 入力データ仕様（GeoJSON）
-
-- 形式: `FeatureCollection`
-- 各 Feature は `Polygon` または `MultiPolygon`
-- 座標: GeoJSON標準（WGS84, `[経度,緯度]`）
-
-### `properties` の推奨列
-
-必須相当（どれか1つ）:
-- `area_id` / `area_code` / `code` / `id`
-- `N03_007`（国土数値情報の行政コード）
-- `zip_code` など郵便番号系キー（後方互換）
-
-名称・フィルタ用（任意）:
-- `area_name` / `name` / `名称`
-- `municipality` / `市区町村` / `市区` / `N03_004` / `N03_005` / `対応エリア`
-
-初期割当（任意）:
-- `depot_code` / `depot` / `管轄デポ` / `担当デポ`
-- 値は `SGM`,`FUJ`,`YOK` 推奨（`相模原`,`藤沢`,`横浜港北(...)` も自動変換）
-
-## 出力CSV
-
+### CSV出力列
 - `area_id`
 - `area_name`
 - `municipality`
 - `depot_code`
 - `depot_name`
 
-## UI調整メモ（2026-02）
+---
 
-- 塗りと境界線のコントラストを再調整し、道路・地名ラベルを優先。
-- デフォルトの地図を地理院標準（日本語）へ変更し、タイル切替を追加。
-- 市区境界を町域境界より太く濃い色でオーバーレイし、ズームに応じて境界線を強調。
-- 運用対象外（既存 SGM/FUJ/YOK 対象外）行政区は非活性化。
+## 技術者向けガイド
 
-## data 配下の整理
+### 公開URL / デプロイ先
+- Production: [https://rgu-chi.vercel.app/](https://rgu-chi.vercel.app/)
+- Hosting: Vercel（Static）
 
-- 旧サンプルGeoJSONは `data/archive/` に移動。
-- 東京（町田市）町丁目データは `data/tokyo/machida_towns.geojson` または e-Stat ZIP を直接指定。
+### Vercel運用（このプロジェクトの標準）
 
-## 細粒度データ再生成
+#### 反映の流れ
+1. GitHubにpush
+2. Vercelが自動デプロイ
+3. `main` へマージ後、Productionが更新
 
-神奈川の町丁目KMZと `asis.csv` から細粒度ポリゴンを再生成できます。
-町田市は、GeoJSONまたは東京都のe-Stat ZIPをそのまま投入できます。
+#### 推奨ワークフロー
+1. 作業ブランチをpush
+2. Vercel Preview URLで動作確認
+3. PR作成・レビュー
+4. `main` マージで本番反映
+
+#### 初回セットアップの要点
+- VercelでGitHubリポジトリ `totkd/RGU` をImport
+- Framework Preset: `Other`
+- Root Directory: `./`
+- Build Command: なし
+- Output Directory: なし（静的配信）
+- Environment Variables: 不要
+
+#### キャッシュ戦略（`vercel.json`）
+- `/index.html`: `no-cache, no-store, must-revalidate`
+- `/app.js`, `/styles.css`: `max-age=300`
+- `/data/*.geojson`, `/data/*.csv`: `max-age=60`
+
+これにより、UI変更は比較的すぐ反映しつつ、巨大GeoJSONも短時間キャッシュで配信します。
+
+### 実装仕様（現行）
+- 起動時に `data/asis_fine_polygons.geojson` を自動読込
+- 既定ベースマップは `Esri ワールドストリート`
+- `Undo / Redo` は**選択履歴**を管理（割当履歴ではない）
+- `All Reset` は初期割当復元 + 選択解除 + 履歴初期化
+- 市区境界は別レイヤで太線表示（ズーム連動強調）
+- 対象外自治体ポリゴンは非活性（選択/割当不可）
+
+### Area（ブロック名）解決ロジック
+ポップアップの `Area` は次の優先順で解決。
+1. `asis.csv` の町域キー（`市区 + 町`）
+2. `asis.csv` の郵便番号キー
+3. `asis.csv` の市区キー
+4. GeoJSON側 `dispatch_area_label / dispatch_area / group_label / 対応エリア`
+
+### 主要ファイル
+- `/Users/tomoki/src/RGU/index.html`: UI構造
+- `/Users/tomoki/src/RGU/styles.css`: デザイン
+- `/Users/tomoki/src/RGU/app.js`: クライアントロジック
+- `/Users/tomoki/src/RGU/asis.csv`: 既存割当マスタ
+- `/Users/tomoki/src/RGU/data/asis_fine_polygons.geojson`: 運用主データ
+- `/Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson`: 市区境界/フォールバック
+- `/Users/tomoki/src/RGU/data/asis_admin_assignments.csv`: 初期割当補助
+
+### 町域データ再生成
+`asis.csv` と町域データから `asis_fine_polygons.geojson` を再生成できます。
 
 ```bash
 python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
@@ -88,12 +113,10 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
 ```
 
-`--tokyo-town-geojson` は `.geojson` と `.zip` の両方を受け付けます。
-未配置の場合は、町田市のみ N03 境界（市単位）へフォールバックします。
+補足:
+- `--tokyo-town-geojson` は `.geojson` と `.zip`（e-Stat配布ZIP）両対応
+- 東京都町域がない場合は `--n03-fallback` へフォールバック
 
-### 東京都町域データの入手先（e-Stat）
-
-1. e-Stat 境界データダウンロードを開く  
-   https://www.e-stat.go.jp/gis/statmap-search/boundary_data
-2. 「小地域（町丁・字等）」を選び、都道府県で「東京都」を指定してダウンロード
-3. 取得したZIP（例: `A002005212020DDKWC13.zip`）を `--tokyo-town-geojson` に指定
+### 既知の注意点
+- 町名の表記ゆれ（異体字/丁目表現差）で `Area` 解決がフォールバックになる場合あり
+- 運用で表記が増えたら `asis.csv` を更新して再生成する運用を推奨
