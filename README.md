@@ -110,12 +110,29 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --tokyo-town-geojson /Users/tomoki/Downloads/A002005212020DDKWC13.zip \
   --baseline /Users/tomoki/src/RGU/data/asis_admin_assignments.csv \
   --n03-fallback /Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson \
+  --coverage-mode operational \
   --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
 ```
 
 補足:
 - `--tokyo-town-geojson` は `.geojson` と `.zip`（e-Stat配布ZIP）両対応
 - 東京都町域がない場合は `--n03-fallback` へフォールバック
+- `--coverage-mode`:
+  - `operational`（既定）: SGM/FUJ/YOKの運用対象自治体中心で生成
+  - `full`: 神奈川全域 + 東京全域を生成（対象外町域もクリック反応させたいときに利用）
+
+全域生成（`full`）例:
+
+```bash
+python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
+  --asis /Users/tomoki/src/RGU/asis.csv \
+  --kanagawa-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC14.zip \
+  --tokyo-town-geojson /Users/tomoki/Downloads/A002005212020DDKWC13.zip \
+  --baseline /Users/tomoki/src/RGU/data/asis_admin_assignments.csv \
+  --n03-fallback /Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson \
+  --coverage-mode full \
+  --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
+```
 
 ### 既知の注意点
 - 町名の表記ゆれ（異体字/丁目表現差）で `Area` 解決がフォールバックになる場合あり

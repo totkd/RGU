@@ -755,9 +755,9 @@ function loadGeoJson(data) {
   rebuildNameIndex();
   void drawMunicipalityBoundaryLayer(data);
 
-  const bounds = state.geoLayer.getBounds();
-  if (bounds.isValid()) {
-    state.map.fitBounds(bounds.pad(0.15));
+  const preferredBounds = getPreferredFitBounds();
+  if (preferredBounds && preferredBounds.isValid()) {
+    state.map.fitBounds(preferredBounds.pad(0.15));
   }
 
   state.initialAssignments = new Map(state.assignments);
@@ -765,6 +765,38 @@ function loadGeoJson(data) {
   refreshAllStyles();
   renderSelected();
   renderStats();
+}
+
+function getPreferredFitBounds() {
+  let preferred = null;
+  state.areaToLayers.forEach((layers, areaId) => {
+    if (!isInScopeArea(areaId)) {
+      return;
+    }
+    layers.forEach((layer) => {
+      if (typeof layer.getBounds !== "function") {
+        return;
+      }
+      const layerBounds = layer.getBounds();
+      if (!layerBounds || !layerBounds.isValid()) {
+        return;
+      }
+      if (!preferred) {
+        preferred = L.latLngBounds(layerBounds.getSouthWest(), layerBounds.getNorthEast());
+      } else {
+        preferred.extend(layerBounds);
+      }
+    });
+  });
+
+  if (preferred && preferred.isValid()) {
+    return preferred;
+  }
+  const fallbackBounds = state.geoLayer?.getBounds();
+  if (fallbackBounds && fallbackBounds.isValid()) {
+    return fallbackBounds;
+  }
+  return null;
 }
 
 function handleAreaClick(areaId, layer) {

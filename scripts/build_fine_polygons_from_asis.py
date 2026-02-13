@@ -223,7 +223,7 @@ def parse_polygon_coords(poly_elem: ET.Element) -> Optional[List[List[List[float
 
 def collect_town_areas_from_kmz(
     kmz_zip_path: Path,
-    target_munis: Set[str],
+    target_munis: Optional[Set[str]],
     area_prefix: str = "KA14",
     default_pref_name: str = "神奈川県",
 ) -> Dict[str, TownArea]:
@@ -239,7 +239,7 @@ def collect_town_areas_from_kmz(
         keycode1 = str(attrs.get("KEYCODE1", "")).strip()
         pref_name = str(attrs.get("PREF_NAME", "")).strip() or default_pref_name
 
-        if municipality not in target_munis:
+        if target_munis is not None and municipality not in target_munis:
             continue
         if not town_name or not keycode1:
             continue
@@ -342,7 +342,7 @@ def ensure_area_prefix(value: str, prefix: str) -> str:
 
 def load_tokyo_town_features_from_kmz(
     tokyo_kmz_zip_path: Path,
-    target_munis: Set[str],
+    target_munis: Optional[Set[str]],
     town_to_depots: Dict[Tuple[str, str], Set[str]],
     muni_to_single_depot: Dict[str, str],
     muni_to_depots: Dict[str, Set[str]],
@@ -367,7 +367,7 @@ def load_tokyo_town_features_from_kmz(
 
 def load_tokyo_town_features(
     tokyo_town_geojson_path: Path,
-    target_munis: Set[str],
+    target_munis: Optional[Set[str]],
     town_to_depots: Dict[Tuple[str, str], Set[str]],
     muni_to_single_depot: Dict[str, str],
     muni_to_depots: Dict[str, Set[str]],
@@ -384,7 +384,7 @@ def load_tokyo_town_features(
         municipality = canonical_municipality(
             props.get("municipality") or props.get("area_name") or props.get("N03_004") or ""
         )
-        if municipality not in target_munis:
+        if target_munis is not None and municipality not in target_munis:
             continue
         town_name = str(props.get("town_name") or props.get("S_NAME") or props.get("name") or "").strip()
         area_id = str(props.get("area_id") or props.get("town_code") or props.get("code") or "").strip()
@@ -419,7 +419,12 @@ def load_tokyo_town_features(
         )
     return out
 
-def load_n03_fallback_features(n03_geojson_path: Path, target_ids: Set[str], muni_to_single_depot: Dict[str, str]) -> List[dict]:
+def load_n03_fallback_features(
+    n03_geojson_path: Path,
+    target_ids: Optional[Set[str]],
+    muni_to_single_depot: Dict[str, str],
+    target_pref: str = "",
+) -> List[dict]:
     if not n03_geojson_path.exists():
         return []
 
@@ -430,7 +435,10 @@ def load_n03_fallback_features(n03_geojson_path: Path, target_ids: Set[str], mun
     for ft in data.get("features", []):
         props = ft.get("properties", {})
         area_id = str(props.get("area_id") or props.get("N03_007") or "").strip()
-        if area_id not in target_ids:
+        if target_ids is not None and area_id not in target_ids:
+            continue
+        pref_name = str(props.get("pref_name") or props.get("N03_001") or "").strip()
+        if target_pref and pref_name != target_pref:
             continue
         municipality = canonical_municipality(props.get("area_name") or props.get("municipality") or props.get("N03_004") or "")
         depot_code = muni_to_single_depot.get(municipality, "")
@@ -442,7 +450,7 @@ def load_n03_fallback_features(n03_geojson_path: Path, target_ids: Set[str], mun
                     "area_name": municipality or area_id,
                     "municipality": municipality or area_id,
                     "town_name": "",
-                    "pref_name": str(props.get("pref_name") or props.get("N03_001") or "").strip(),
+                    "pref_name": pref_name,
                     "town_code": area_id,
                     "source": "n03-fallback",
                     "depot_code": depot_code,
@@ -496,6 +504,15 @@ def main() -> None:
         default="data/asis_fine_polygons.geojson",
         help="Output GeoJSON path.",
     )
+    parser.add_argument(
+        "--coverage-mode",
+        choices=("operational", "full"),
+        default="operational",
+        help=(
+            "operational: 既存運用対象のみ生成（既定）。 "
+            "full: 神奈川全域 + 東京全域を生成（Tokyo町域入力が必要）。"
+        ),
+    )
     args = parser.parse_args()
 
     asis_path = Path(args.asis)
@@ -506,10 +523,14 @@ def main() -> None:
     out_path = Path(args.out)
 
     muni_to_single_depot, muni_to_depots = load_baseline_assignments(baseline_path)
-    kanagawa_target_munis = set(muni_to_depots.keys()) - {"町田市"}
-    tokyo_target_munis = {"町田市"}
+    operational_munis = set(muni_to_depots.keys())
+    kanagawa_target_munis: Optional[Set[str]] = operational_munis - {"町田市"}
+    tokyo_target_munis: Optional[Set[str]] = {"町田市"}
+    if args.coverage_mode == "full":
+        kanagawa_target_munis = None
+        tokyo_target_munis = None
 
-    town_to_depots = build_town_to_depots_map(asis_path, set(muni_to_depots.keys()))
+    town_to_depots = build_town_to_depots_map(asis_path, operational_munis)
     town_areas = collect_town_areas_from_kmz(kmz_zip_path, kanagawa_target_munis)
     kanagawa_town_features = build_town_features(town_areas, town_to_depots, muni_to_single_depot, muni_to_depots)
 
@@ -530,10 +551,24 @@ def main() -> None:
             muni_to_depots,
         )
 
-    # 町田市の町丁目データが無い場合のみ、N03境界でフォールバックする。
+    # 東京町域データが無い場合は、N03境界でフォールバックする。
     fallback_features = []
     if not tokyo_town_features:
-        fallback_features = load_n03_fallback_features(n03_fallback_path, {"13209"}, muni_to_single_depot)
+        if args.coverage_mode == "full":
+            fallback_features = load_n03_fallback_features(
+                n03_fallback_path,
+                target_ids=None,
+                muni_to_single_depot=muni_to_single_depot,
+                target_pref="東京都",
+            )
+            print("warn: Tokyo町域データが読めなかったため、東京都はN03境界でフォールバックしました。")
+        else:
+            fallback_features = load_n03_fallback_features(
+                n03_fallback_path,
+                target_ids={"13209"},
+                muni_to_single_depot=muni_to_single_depot,
+                target_pref="東京都",
+            )
 
     all_features = kanagawa_town_features + tokyo_town_features + fallback_features
     out = {"type": "FeatureCollection", "features": all_features}
@@ -544,6 +579,7 @@ def main() -> None:
 
     stats = summarize(all_features)
     print(f"wrote: {out_path}")
+    print(f"coverage_mode: {args.coverage_mode}")
     print(f"features: {stats['total']}")
     print(f"assigned: {stats['assigned']} (SGM={stats['SGM']}, FUJ={stats['FUJ']}, YOK={stats['YOK']})")
     print(f"unassigned: {stats['unassigned']}")
