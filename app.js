@@ -156,7 +156,6 @@ const state = {
   assignments: new Map(),
   initialAssignments: new Map(),
   selected: new Set(),
-  focusedOutOfScopeAreaId: "",
   selectionHistory: [],
   selectionHistoryIndex: -1,
   inScopeMunicipalities: new Set(DEFAULT_IN_SCOPE_MUNICIPALITIES),
@@ -696,7 +695,6 @@ function loadGeoJson(data) {
   state.nameIndex.clear();
   state.assignments.clear();
   state.selected.clear();
-  state.focusedOutOfScopeAreaId = "";
 
   let fallbackCounter = 0;
 
@@ -800,28 +798,15 @@ function getPreferredFitBounds() {
 }
 
 function handleAreaClick(areaId, layer) {
-  const inScope = isInScopeArea(areaId);
   let changedSelection = false;
-  let changedOutOfScopeFocus = false;
-  const previousFocusedOutOfScope = state.focusedOutOfScopeAreaId;
-
-  if (inScope) {
-    if (state.selected.has(areaId)) {
-      state.selected.delete(areaId);
-    } else {
-      state.selected.add(areaId);
-    }
-    changedSelection = true;
-    applyAreaStyle(areaId);
-    renderSelected();
-  } else if (state.focusedOutOfScopeAreaId !== areaId) {
-    state.focusedOutOfScopeAreaId = areaId;
-    changedOutOfScopeFocus = true;
-    if (previousFocusedOutOfScope) {
-      applyAreaStyle(previousFocusedOutOfScope);
-    }
-    applyAreaStyle(areaId);
+  if (state.selected.has(areaId)) {
+    state.selected.delete(areaId);
+  } else {
+    state.selected.add(areaId);
   }
+  changedSelection = true;
+  applyAreaStyle(areaId);
+  renderSelected();
 
   const content = buildPopupHtml(areaId);
   if (layer.getPopup()) {
@@ -831,7 +816,7 @@ function handleAreaClick(areaId, layer) {
   }
   layer.openPopup();
 
-  if (changedSelection || changedOutOfScopeFocus) {
+  if (changedSelection) {
     pushSelectionHistory();
   }
 }
@@ -1138,18 +1123,17 @@ function styleForArea(areaId) {
   const depot = DEPOTS[assignment];
   const baseColor = depot ? depot.color : "#9ea8b6";
   const isOutOfScope = !isInScopeArea(areaId);
-  const isFocusedOutOfScope = isOutOfScope && state.focusedOutOfScopeAreaId === areaId;
   const activeFill = selected ? 0.3 : 0.12;
   const fujScale = assignment === "FUJ" ? 1.3 : 1;
 
-  if (isFocusedOutOfScope) {
+  if (isOutOfScope && selected) {
     return {
-      color: "#0f1720",
-      weight: 2.4 + borderBoost * 0.6,
+      color: "#334155",
+      weight: 2.5 + borderBoost * 0.8,
       dashArray: "",
-      fillColor: baseColor,
-      fillOpacity: 0.03,
-      opacity: 0.96,
+      fillColor: "#8f98a5",
+      fillOpacity: 0.24,
+      opacity: 0.92,
     };
   }
 
@@ -1206,10 +1190,11 @@ async function drawMunicipalityBoundaryLayer(fallbackData) {
 function getMunicipalityBoundaryStyle() {
   const zoom = state.map ? state.map.getZoom() : 11;
   const zoomFactor = Math.max(0, zoom - 10);
+  const borderBoost = Math.min(1.1, zoomFactor * 0.1);
   return {
-    color: "#071632",
-    weight: 4.2 + Math.min(2.6, zoomFactor * 0.35),
-    opacity: 0.96,
+    color: "#44566c",
+    weight: 1.25 + borderBoost * 0.7,
+    opacity: 0.86,
     fillOpacity: 0,
     interactive: false,
   };
@@ -1255,7 +1240,7 @@ function applyAreaStyle(areaId) {
 }
 
 function toggleAreaSelection(areaId) {
-  if (!state.areaToLayers.has(areaId) || !isInScopeArea(areaId)) {
+  if (!state.areaToLayers.has(areaId)) {
     return;
   }
   if (state.selected.has(areaId)) {
@@ -1333,24 +1318,15 @@ function isSameAssignmentSnapshot(a, b) {
 }
 
 function createSelectionSnapshot() {
-  return {
-    selectedAreaIds: [...state.selected].sort((a, b) => a.localeCompare(b, "ja")),
-    focusedOutOfScopeAreaId: state.focusedOutOfScopeAreaId || "",
-  };
+  return [...state.selected].sort((a, b) => a.localeCompare(b, "ja"));
 }
 
 function isSameSelectionSnapshot(a, b) {
-  if (!a || !b || !Array.isArray(a.selectedAreaIds) || !Array.isArray(b.selectedAreaIds)) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
     return false;
   }
-  if (a.focusedOutOfScopeAreaId !== b.focusedOutOfScopeAreaId) {
-    return false;
-  }
-  if (a.selectedAreaIds.length !== b.selectedAreaIds.length) {
-    return false;
-  }
-  for (let i = 0; i < a.selectedAreaIds.length; i += 1) {
-    if (a.selectedAreaIds[i] !== b.selectedAreaIds[i]) {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) {
       return false;
     }
   }
@@ -1358,7 +1334,6 @@ function isSameSelectionSnapshot(a, b) {
 }
 
 function resetSelectionHistory() {
-  state.focusedOutOfScopeAreaId = "";
   state.selectionHistory = [createSelectionSnapshot()];
   state.selectionHistoryIndex = 0;
   updateHistoryButtons();
@@ -1379,11 +1354,10 @@ function pushSelectionHistory() {
 }
 
 function applySelectionSnapshot(snapshot) {
-  if (!snapshot || !Array.isArray(snapshot.selectedAreaIds)) {
+  if (!Array.isArray(snapshot)) {
     return;
   }
-  state.selected = new Set(snapshot.selectedAreaIds);
-  state.focusedOutOfScopeAreaId = String(snapshot.focusedOutOfScopeAreaId || "");
+  state.selected = new Set(snapshot);
   refreshAllStyles();
   renderSelected();
 }
@@ -1422,7 +1396,6 @@ function resetAllAssignments() {
   }
   state.assignments = new Map(state.initialAssignments);
   state.selected.clear();
-  state.focusedOutOfScopeAreaId = "";
   refreshAllStyles();
   syncPopupContentForAllAreas();
   renderSelected();
