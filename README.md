@@ -6,7 +6,7 @@
 ![Data](https://img.shields.io/badge/Data-GeoJSON%20%2B%20CSV-2563eb)
 
 配送エリアを地図上で調整するための運用ツールです。  
-現在の既定データでは、**神奈川県 + 東京都全域**の町域ポリゴンを表示し、`SGM / FUJ / YOK` の担当割当を編集してCSV出力できます。
+現在の既定データでは、**神奈川県 + 東京都 + 埼玉県 + 千葉県**の町域ポリゴンを表示し、`SGM / FUJ / YOK` の担当割当を編集してCSV出力できます。
 
 ---
 
@@ -117,6 +117,8 @@
 python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --asis /Users/tomoki/src/RGU/asis.csv \
   --kanagawa-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC14.zip \
+  --saitama-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC11.zip \
+  --chiba-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC12.zip \
   --tokyo-town-geojson /Users/tomoki/Downloads/A002005212020DDKWC13.zip \
   --baseline /Users/tomoki/src/RGU/data/asis_admin_assignments.csv \
   --n03-fallback /Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson \
@@ -129,7 +131,7 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
 - 東京町域が読めない場合は `--n03-fallback` でフォールバック
 - `--coverage-mode`:
   - `operational`（既定）: 運用対象自治体中心で生成
-  - `full`: 神奈川全域 + 東京全域を生成
+  - `full`: 神奈川全域 + 東京全域 + 埼玉全域 + 千葉全域を生成
 
 全域生成（`full`）例:
 
@@ -137,6 +139,8 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
 python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --asis /Users/tomoki/src/RGU/asis.csv \
   --kanagawa-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC14.zip \
+  --saitama-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC11.zip \
+  --chiba-kmz-zip /Users/tomoki/Downloads/A002005212020DDKWC12.zip \
   --tokyo-town-geojson /Users/tomoki/Downloads/A002005212020DDKWC13.zip \
   --baseline /Users/tomoki/src/RGU/data/asis_admin_assignments.csv \
   --n03-fallback /Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson \
@@ -156,4 +160,5 @@ python3 /Users/tomoki/src/RGU/scripts/build_admin_boundary_geojson.py \
 ### 既知の注意点
 - 町名の表記ゆれ（異体字 / 丁目表現差）で `Area` 解決がフォールバックになる場合あり
 - 運用対象外エリアのみを選択して割当しても、割当データは変化しない
+- `coverage-mode full` はGeoJSONサイズが大きくなるため、初回読込が重くなる場合あり
 - 運用で表記が増えたら `asis.csv` を更新して再生成する運用を推奨

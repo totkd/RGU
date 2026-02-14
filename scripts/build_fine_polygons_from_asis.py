@@ -365,6 +365,34 @@ def load_tokyo_town_features_from_kmz(
     )
 
 
+def load_pref_town_features_from_kmz(
+    kmz_zip_path: Path,
+    target_munis: Optional[Set[str]],
+    town_to_depots: Dict[Tuple[str, str], Set[str]],
+    muni_to_single_depot: Dict[str, str],
+    muni_to_depots: Dict[str, Set[str]],
+    area_prefix: str,
+    default_pref_name: str,
+    source_tag: str,
+) -> List[dict]:
+    if not kmz_zip_path.exists():
+        return []
+
+    areas = collect_town_areas_from_kmz(
+        kmz_zip_path,
+        target_munis,
+        area_prefix=area_prefix,
+        default_pref_name=default_pref_name,
+    )
+    return build_town_features(
+        areas,
+        town_to_depots,
+        muni_to_single_depot,
+        muni_to_depots,
+        source_tag=source_tag,
+    )
+
+
 def load_tokyo_town_features(
     tokyo_town_geojson_path: Path,
     target_munis: Optional[Set[str]],
@@ -490,6 +518,16 @@ def main() -> None:
         help="Baseline admin assignment CSV for municipality fallback.",
     )
     parser.add_argument(
+        "--saitama-kmz-zip",
+        default="/Users/tomoki/Downloads/A002005212020DDKWC11.zip",
+        help="Path to e-Stat KMZ wrapper ZIP for Saitama.",
+    )
+    parser.add_argument(
+        "--chiba-kmz-zip",
+        default="/Users/tomoki/Downloads/A002005212020DDKWC12.zip",
+        help="Path to e-Stat KMZ wrapper ZIP for Chiba.",
+    )
+    parser.add_argument(
         "--tokyo-town-geojson",
         default="data/tokyo/machida_towns.geojson",
         help="Optional Tokyo town-level input. Supports GeoJSON or e-Stat KMZ wrapper ZIP (e.g. A002005212020DDKWC13.zip).",
@@ -516,7 +554,9 @@ def main() -> None:
     args = parser.parse_args()
 
     asis_path = Path(args.asis)
-    kmz_zip_path = Path(args.kanagawa_kmz_zip)
+    kanagawa_kmz_zip_path = Path(args.kanagawa_kmz_zip)
+    saitama_kmz_zip_path = Path(args.saitama_kmz_zip)
+    chiba_kmz_zip_path = Path(args.chiba_kmz_zip)
     baseline_path = Path(args.baseline)
     tokyo_town_geojson_path = Path(args.tokyo_town_geojson)
     n03_fallback_path = Path(args.n03_fallback)
@@ -531,7 +571,7 @@ def main() -> None:
         tokyo_target_munis = None
 
     town_to_depots = build_town_to_depots_map(asis_path, operational_munis)
-    town_areas = collect_town_areas_from_kmz(kmz_zip_path, kanagawa_target_munis)
+    town_areas = collect_town_areas_from_kmz(kanagawa_kmz_zip_path, kanagawa_target_munis)
     kanagawa_town_features = build_town_features(town_areas, town_to_depots, muni_to_single_depot, muni_to_depots)
 
     if tokyo_town_geojson_path.suffix.lower() == ".zip":
@@ -550,6 +590,34 @@ def main() -> None:
             muni_to_single_depot,
             muni_to_depots,
         )
+
+    saitama_town_features = []
+    chiba_town_features = []
+    if args.coverage_mode == "full":
+        saitama_town_features = load_pref_town_features_from_kmz(
+            saitama_kmz_zip_path,
+            target_munis=None,
+            town_to_depots=town_to_depots,
+            muni_to_single_depot=muni_to_single_depot,
+            muni_to_depots=muni_to_depots,
+            area_prefix="SA11",
+            default_pref_name="埼玉県",
+            source_tag="e-stat-r2ka11-kmz",
+        )
+        chiba_town_features = load_pref_town_features_from_kmz(
+            chiba_kmz_zip_path,
+            target_munis=None,
+            town_to_depots=town_to_depots,
+            muni_to_single_depot=muni_to_single_depot,
+            muni_to_depots=muni_to_depots,
+            area_prefix="CB12",
+            default_pref_name="千葉県",
+            source_tag="e-stat-r2ka12-kmz",
+        )
+        if not saitama_town_features:
+            print("warn: Saitama町域データが読めなかったため、埼玉県は出力に含まれません。")
+        if not chiba_town_features:
+            print("warn: Chiba町域データが読めなかったため、千葉県は出力に含まれません。")
 
     # 東京町域データが無い場合は、N03境界でフォールバックする。
     fallback_features = []
@@ -570,7 +638,13 @@ def main() -> None:
                 target_pref="東京都",
             )
 
-    all_features = kanagawa_town_features + tokyo_town_features + fallback_features
+    all_features = (
+        kanagawa_town_features
+        + tokyo_town_features
+        + saitama_town_features
+        + chiba_town_features
+        + fallback_features
+    )
     out = {"type": "FeatureCollection", "features": all_features}
 
     out_path.parent.mkdir(parents=True, exist_ok=True)

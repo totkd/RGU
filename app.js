@@ -1067,7 +1067,7 @@ function formatAreaIdForDisplay(areaId) {
   if (raw.startsWith("name:") || raw.startsWith("feature:")) {
     return raw;
   }
-  return raw.replace(/^(KA\d+|TK\d+|N03|KA|TK)-/i, "");
+  return raw.replace(/^(KA\d+|TK\d+|SA\d+|CB\d+|N03|KA|TK|SA|CB)-/i, "");
 }
 
 function tooltipText(areaId) {
