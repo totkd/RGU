@@ -1138,12 +1138,12 @@ function styleForArea(areaId) {
   }
 
   return {
-    color: isOutOfScope ? "#7c8591" : selected ? "#0f1720" : "#44566c",
-    weight: isOutOfScope ? 0.9 + borderBoost * 0.4 : selected ? 2.5 + borderBoost * 0.8 : 1.25 + borderBoost * 0.7,
-    dashArray: isOutOfScope ? "3 5" : selected ? "4 3" : "",
+    color: isOutOfScope ? "#6b7280" : selected ? "#0f1720" : "#44566c",
+    weight: isOutOfScope ? 1.05 + borderBoost * 0.35 : selected ? 2.5 + borderBoost * 0.8 : 1.25 + borderBoost * 0.7,
+    dashArray: isOutOfScope ? "" : selected ? "4 3" : "",
     fillColor: baseColor,
-    fillOpacity: isOutOfScope ? 0.02 : Math.min(0.5, activeFill * fujScale),
-    opacity: isOutOfScope ? 0.28 : 0.86,
+    fillOpacity: isOutOfScope ? 0.012 : Math.min(0.5, activeFill * fujScale),
+    opacity: isOutOfScope ? 0.36 : 0.86,
   };
 }
 
