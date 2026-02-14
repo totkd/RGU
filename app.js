@@ -146,6 +146,7 @@ const MUNICIPALITY_KEYS = ["municipality", "city", "ward", "自治体", "市区�
 const MOBILE_BREAKPOINT_PX = 1180;
 const FULL_ADMIN_BOUNDARY_GEOJSON = "./data/n03_tokyo_kanagawa_admin_areas.geojson";
 const OPERATIONAL_ADMIN_BOUNDARY_GEOJSON = "./data/n03_target_admin_areas.geojson";
+const DEFAULT_VISIBLE_PREFECTURES = new Set(["神奈川県", "東京都"]);
 
 const state = {
   map: null,
@@ -156,8 +157,11 @@ const state = {
   areaMeta: new Map(),
   nameIndex: new Map(),
   assignments: new Map(),
+  allAssignments: new Map(),
   initialAssignments: new Map(),
+  initialAllAssignments: new Map(),
   selected: new Set(),
+  visiblePrefectures: new Set(DEFAULT_VISIBLE_PREFECTURES),
   selectionHistory: [],
   selectionHistoryIndex: -1,
   inScopeMunicipalities: new Set(DEFAULT_IN_SCOPE_MUNICIPALITIES),
@@ -185,6 +189,7 @@ const el = {
   selectedAreas: document.getElementById("selected-zips"),
   stats: document.getElementById("stats"),
   basemapInputs: [...document.querySelectorAll('input[name="basemap"]')],
+  prefectureVisibilityInputs: [...document.querySelectorAll('input[name="prefecture-visibility"]')],
 };
 
 init();
@@ -242,6 +247,9 @@ function setupEventHandlers() {
       }
     });
   });
+  el.prefectureVisibilityInputs.forEach((input) => {
+    input.addEventListener("change", handlePrefectureVisibilityChange);
+  });
 
   document.querySelectorAll(".depot-btn").forEach((btn) => {
     btn.addEventListener("click", () => assignSelected(btn.dataset.depot));
@@ -257,6 +265,37 @@ function setupEventHandlers() {
   updateHistoryButtons();
 }
 
+function handlePrefectureVisibilityChange() {
+  const next = new Set(
+    el.prefectureVisibilityInputs
+      .filter((input) => input.checked)
+      .map((input) => String(input.value || "").trim())
+      .filter(Boolean)
+  );
+  const sameSize = next.size === state.visiblePrefectures.size;
+  const sameMembers = sameSize && [...next].every((value) => state.visiblePrefectures.has(value));
+  if (sameMembers) {
+    return;
+  }
+  state.visiblePrefectures = next;
+  rebuildGeoLayerForVisibility();
+}
+
+function rebuildGeoLayerForVisibility() {
+  if (!state.loadedGeoData) {
+    return;
+  }
+  const assignmentSnapshot = new Map(state.allAssignments);
+  const selectedSnapshot = new Set(state.selected);
+  const initialAssignmentsSnapshot = new Map(state.initialAllAssignments);
+  loadGeoJson(state.loadedGeoData, {
+    preserveAssignmentSnapshot: assignmentSnapshot,
+    preserveSelectionSnapshot: selectedSnapshot,
+    preserveInitialAssignments: initialAssignmentsSnapshot,
+    skipFitBounds: true,
+  });
+}
+
 async function loadDefaultGeoJson() {
   try {
     const res = await fetch("./data/asis_fine_polygons.geojson");
@@ -264,10 +303,33 @@ async function loadDefaultGeoJson() {
       throw new Error(`status ${res.status}`);
     }
     const data = await res.json();
+    initializeAllAssignmentsFromData(data);
     loadGeoJson(data);
   } catch (_err) {
     alert("Failed to load default data: data/asis_fine_polygons.geojson");
   }
+}
+
+function initializeAllAssignmentsFromData(data) {
+  state.allAssignments.clear();
+  state.initialAllAssignments.clear();
+
+  let fallbackCounter = 0;
+  (data?.features || []).forEach((feature) => {
+    const props = feature?.properties || {};
+    let areaId = getAreaId(props);
+    const areaName = getAreaName(props);
+    if (!areaId) {
+      fallbackCounter += 1;
+      areaId = areaName ? `name:${areaName}` : `feature:${String(fallbackCounter).padStart(5, "0")}`;
+    }
+    if (!areaId || state.allAssignments.has(areaId)) {
+      return;
+    }
+    state.allAssignments.set(areaId, extractDepot(props) || "");
+  });
+
+  state.initialAllAssignments = new Map(state.allAssignments);
 }
 
 function initResponsiveSidebarMode() {
@@ -677,11 +739,15 @@ function applyAsisAreaLabelsToLoadedAreas() {
   });
 }
 
-function loadGeoJson(data) {
+function loadGeoJson(data, options = {}) {
   if (!data || data.type !== "FeatureCollection" || !Array.isArray(data.features)) {
     alert("Please provide a valid GeoJSON FeatureCollection.");
     return;
   }
+  const preserveAssignmentSnapshot = options.preserveAssignmentSnapshot instanceof Map ? options.preserveAssignmentSnapshot : null;
+  const preserveSelectionSnapshot = options.preserveSelectionSnapshot instanceof Set ? options.preserveSelectionSnapshot : null;
+  const preserveInitialAssignments = options.preserveInitialAssignments instanceof Map ? options.preserveInitialAssignments : null;
+  const skipFitBounds = Boolean(options.skipFitBounds);
 
   state.loadedGeoData = data;
 
@@ -699,6 +765,7 @@ function loadGeoJson(data) {
   let fallbackCounter = 0;
 
   state.geoLayer = L.geoJSON(data, {
+    filter: (feature) => isPrefectureVisible(feature?.properties || {}),
     style: (feature) => {
       const areaId = getAreaId(feature?.properties || {});
       return styleForArea(areaId);
@@ -732,9 +799,12 @@ function loadGeoJson(data) {
         });
       }
 
-      const currentDepot = state.assignments.get(areaId) || "";
+      const snapshotDepot = preserveAssignmentSnapshot?.get(areaId) || "";
+      const cachedDepot = state.allAssignments.get(areaId) || "";
       const initialDepot = extractDepot(props);
-      state.assignments.set(areaId, initialDepot || currentDepot);
+      const resolvedDepot = snapshotDepot || cachedDepot || initialDepot || "";
+      state.assignments.set(areaId, resolvedDepot);
+      state.allAssignments.set(areaId, resolvedDepot);
 
       layer.on("click", () => handleAreaClick(areaId, layer));
       layer.bindTooltip(tooltipText(areaId), {
@@ -753,16 +823,47 @@ function loadGeoJson(data) {
   rebuildNameIndex();
   void drawMunicipalityBoundaryLayer(data);
 
+  if (preserveSelectionSnapshot) {
+    state.selected = new Set([...preserveSelectionSnapshot].filter((areaId) => state.areaToLayers.has(areaId)));
+  }
+
   const preferredBounds = getPreferredFitBounds();
-  if (preferredBounds && preferredBounds.isValid()) {
+  if (!skipFitBounds && preferredBounds && preferredBounds.isValid()) {
     state.map.fitBounds(preferredBounds.pad(0.15));
   }
 
-  state.initialAssignments = new Map(state.assignments);
+  if (state.initialAllAssignments.size > 0) {
+    state.initialAssignments = buildVisibleAssignmentsFrom(state.initialAllAssignments);
+  } else if (preserveInitialAssignments) {
+    state.initialAssignments = buildVisibleAssignmentsFrom(preserveInitialAssignments);
+  } else {
+    state.initialAssignments = new Map(state.assignments);
+  }
   resetSelectionHistory();
   refreshAllStyles();
   renderSelected();
   renderStats();
+}
+
+function isPrefectureVisible(props) {
+  const prefName = getPrefectureName(props);
+  if (!prefName) {
+    return true;
+  }
+  return state.visiblePrefectures.has(prefName);
+}
+
+function getPrefectureName(props) {
+  const prefName = String(props?.pref_name || props?.N03_001 || "").trim();
+  return prefName;
+}
+
+function buildVisibleAssignmentsFrom(source) {
+  const out = new Map();
+  state.areaToLayers.forEach((_layers, areaId) => {
+    out.set(areaId, source.get(areaId) || "");
+  });
+  return out;
 }
 
 function getPreferredFitBounds() {
@@ -1292,6 +1393,7 @@ function assignSelected(depotCode) {
       return;
     }
     state.assignments.set(areaId, depotCode);
+    state.allAssignments.set(areaId, depotCode);
     changed = true;
 
     const layers = state.areaToLayers.get(areaId) || [];
@@ -1402,7 +1504,8 @@ function resetAllAssignments() {
   if (state.areaMeta.size === 0) {
     return;
   }
-  state.assignments = new Map(state.initialAssignments);
+  state.allAssignments = new Map(state.initialAllAssignments);
+  state.assignments = buildVisibleAssignmentsFrom(state.allAssignments);
   state.selected.clear();
   refreshAllStyles();
   syncPopupContentForAllAreas();

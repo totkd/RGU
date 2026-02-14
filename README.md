@@ -13,6 +13,7 @@
 ## 一般向けガイド
 
 ### できること
+- `Polygon Visibility` で都県ごとの町域表示ON/OFF
 - 町域ポリゴンをクリックして複数選択（運用対象外エリアも選択可能）
 - 選択町域を `SGM / FUJ / YOK` に一括割当（割当は運用対象エリアのみ反映）
 - `Undo / Redo`（選択状態の履歴）
@@ -30,6 +31,7 @@
 
 ### 画面の見方
 - `Map Tiles`: 背景地図の切替
+- `Polygon Visibility`: 都県単位の町域表示切替（既定: 神奈川/東京ON, 千葉/埼玉OFF）
 - `Zone Select`: 選択件数・割当操作・Undo / Redo・All Reset
 - `Stats`: 全体件数 / 割当済み / 未割当 / デポ別件数
 - `Selected Zones`: 現在選択中の町域一覧
@@ -80,6 +82,7 @@
 ### 現行仕様（実装）
 - 起動時に `data/asis_fine_polygons.geojson` を自動読込
 - 既定ベースマップは `Esri ワールドストリート`
+- 既定表示都県は `神奈川県` と `東京都`（`Polygon Visibility`で切替）
 - `Undo / Redo` は**選択履歴**を管理（割当履歴ではない）
 - `All Reset` は初期割当復元 + 選択解除 + 履歴初期化
 - 市区町村境界は `data/n03_tokyo_kanagawa_admin_areas.geojson` を既定Overlay表示

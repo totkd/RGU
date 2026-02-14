@@ -155,6 +155,26 @@ h2 {
   margin: 0;
 }
 
+.checkbox-group {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.checkbox-group label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #1f2430;
+}
+
+.checkbox-group input[type="checkbox"] {
+  margin: 0;
+}
+
 input,
 select,
 button {
@@ -209,6 +229,10 @@ button.ghost.danger {
   font-size: 12px;
   color: #6b7380;
   font-weight: 600;
+}
+
+.map-subhead {
+  margin-top: 12px;
 }
 
 .depot-actions {
