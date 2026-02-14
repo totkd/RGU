@@ -1,152 +1,35 @@
-const DEPOTS = {
-  SGM: { name: "相模原デポ SGM", color: "#2e7d32" },
-  FUJ: { name: "藤沢デポ FUJ", color: "#2d6cdf" },
-  YOK: { name: "横浜港北デポ YOK", color: "#b71c1c" },
-};
-
-const DEPOT_SITES = [
-  {
-    code: "SGM",
-    address: "相模原市中央区上溝7-12-15",
-    lat: 35.558763,
-    lng: 139.370176,
-  },
-  {
-    code: "FUJ",
-    address: "藤沢市石川5-10-27",
-    lat: 35.3982,
-    lng: 139.4699,
-  },
-  {
-    code: "YOK",
-    address: "横浜市港北区樽町1-19-6",
-    lat: 35.548296,
-    lng: 139.648303,
-  },
-];
-
-const BASEMAPS = {
-  gsi_std: {
-    name: "地理院 標準（日本語）",
-    url: "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png",
-    options: {
-      attribution:
-        '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
-      maxZoom: 18,
-    },
-  },
-  gsi_pale: {
-    name: "地理院 淡色",
-    url: "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
-    options: {
-      attribution:
-        '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
-      maxZoom: 18,
-    },
-  },
-  gsi_seamless: {
-    name: "地理院 シームレス写真",
-    url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
-    options: {
-      attribution:
-        '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
-      maxZoom: 18,
-    },
-  },
-  osm: {
-    name: "オープンストリートマップ",
-    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-    options: {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      maxZoom: 19,
-    },
-  },
-  carto: {
-    name: "CARTO ボイジャー",
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    options: {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 20,
-    },
-  },
-  carto_light: {
-    name: "CARTO ポジトロン",
-    url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    options: {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-      maxZoom: 20,
-    },
-  },
-  esri_street: {
-    name: "Esri ワールドストリート",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    options: {
-      attribution: "Tiles &copy; Esri",
-      maxZoom: 19,
-    },
-  },
-};
-
-const DEFAULT_IN_SCOPE_MUNICIPALITIES = new Set([
-  "大和市",
-  "川崎市中原区",
-  "川崎市多摩区",
-  "川崎市宮前区",
-  "川崎市川崎区",
-  "川崎市幸区",
-  "川崎市高津区",
-  "川崎市麻生区",
-  "平塚市",
-  "座間市",
-  "横浜市中区",
-  "横浜市保土ケ谷区",
-  "横浜市南区",
-  "横浜市戸塚区",
-  "横浜市旭区",
-  "横浜市栄区",
-  "横浜市泉区",
-  "横浜市港北区",
-  "横浜市港南区",
-  "横浜市瀬谷区",
-  "横浜市磯子区",
-  "横浜市神奈川区",
-  "横浜市緑区",
-  "横浜市西区",
-  "横浜市都筑区",
-  "横浜市金沢区",
-  "横浜市青葉区",
-  "横浜市鶴見区",
-  "海老名市",
-  "町田市",
-  "相模原市中央区",
-  "相模原市南区",
-  "綾瀬市",
-  "茅ヶ崎市",
-  "藤沢市",
-  "鎌倉市",
-]);
-
-const ZIP_KEYS = ["zip_code", "zipcode", "zip", "postal_code", "郵便番号"];
-const AREA_ID_KEYS = ["area_id", "area_code", "code", "id", "N03_007", ...ZIP_KEYS];
-const AREA_NAME_KEYS = [
-  "area_name",
-  "name",
-  "名称",
-  "municipality",
-  "市区町村",
-  "市区",
-  "対応エリア",
-  "N03_004",
-  "N03_003",
-];
-const MUNICIPALITY_KEYS = ["municipality", "city", "ward", "自治体", "市区町村", "市区", "対応エリア", "N03_004"];
-const MOBILE_BREAKPOINT_PX = 1180;
-const FULL_ADMIN_BOUNDARY_GEOJSON = "./data/n03_tokyo_kanagawa_admin_areas.geojson";
-const OPERATIONAL_ADMIN_BOUNDARY_GEOJSON = "./data/n03_target_admin_areas.geojson";
-const DEFAULT_VISIBLE_PREFECTURES = new Set(["神奈川県", "東京都"]);
+import {
+  BASEMAPS,
+  DEFAULT_IN_SCOPE_MUNICIPALITIES,
+  DEFAULT_VISIBLE_PREFECTURES,
+  DEPOTS,
+  DEPOT_SITES,
+  FULL_ADMIN_BOUNDARY_GEOJSON,
+  MOBILE_BREAKPOINT_PX,
+  OPERATIONAL_ADMIN_BOUNDARY_GEOJSON,
+  ZIP_KEYS,
+} from "./src/config.js";
+import {
+  canonicalAreaName,
+  canonicalMunicipality,
+  canonicalTownName,
+  collectPostalCodes,
+  escapeHtml,
+  extractDepot,
+  extractTownName,
+  formatAreaIdForDisplay,
+  formatPostalCodes,
+  getAreaId,
+  getAreaName,
+  getMunicipality,
+  getMunicipalityFromProps,
+  normalizeDepotCode,
+  normalizeHeader,
+  normalizeMatchKey,
+  normalizeZip,
+  parseCsvRows,
+  pickCsvValue,
+} from "./src/utils.js";
 
 const state = {
   map: null,
@@ -549,84 +432,6 @@ function buildAsisAreaLabelMaps(csvText) {
   state.asisPostalCodesByTown = collapsePostalCodeMap(postalByTown);
 }
 
-function parseCsvRows(text) {
-  const rows = [];
-  let row = [];
-  let field = "";
-  let inQuotes = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (ch === ",") {
-      row.push(field);
-      field = "";
-      continue;
-    }
-
-    if (ch === "\n") {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = "";
-      continue;
-    }
-
-    if (ch === "\r") {
-      continue;
-    }
-
-    field += ch;
-  }
-
-  row.push(field);
-  if (row.length > 1 || String(row[0] || "").trim()) {
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-function normalizeHeader(value) {
-  return String(value || "")
-    .replace(/\ufeff/g, "")
-    .trim()
-    .toLowerCase();
-}
-
-function pickCsvValue(row, indexByHeader, keys) {
-  for (const key of keys) {
-    const idx = indexByHeader.get(String(key).toLowerCase());
-    if (idx === undefined) {
-      continue;
-    }
-    const value = row[idx];
-    if (value !== undefined && value !== null && String(value).trim()) {
-      return String(value).trim();
-    }
-  }
-  return "";
-}
-
 function addCount(container, key, label) {
   if (!key || !label) {
     return;
@@ -678,33 +483,6 @@ function collapsePostalCodeMap(codeMap) {
     }
   });
   return out;
-}
-
-function collectPostalCodes(raw) {
-  const input = String(raw || "").trim();
-  if (!input) {
-    return [];
-  }
-  const codes = [];
-  const re = /(\d{3})-?(\d{4})/g;
-  let m = re.exec(input);
-  while (m) {
-    const code = `${m[1]}${m[2]}`;
-    if (code.length === 7) {
-      codes.push(code);
-    }
-    m = re.exec(input);
-  }
-
-  if (codes.length > 0) {
-    return [...new Set(codes)];
-  }
-
-  const normalized = normalizeZip(input);
-  if (normalized.length === 7) {
-    return [normalized];
-  }
-  return [];
 }
 
 function applyAsisAreaLabelsToLoadedAreas() {
@@ -922,85 +700,6 @@ function handleAreaClick(areaId, layer) {
   }
 }
 
-function getAreaId(props) {
-  for (const key of AREA_ID_KEYS) {
-    if (props[key] === null || props[key] === undefined) {
-      continue;
-    }
-    const value = normalizeAreaIdValue(key, props[key]);
-    if (value) {
-      return value;
-    }
-  }
-  return "";
-}
-
-function normalizeAreaIdValue(key, value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
-  }
-  if (ZIP_KEYS.includes(key)) {
-    return normalizeZip(raw);
-  }
-  return raw;
-}
-
-function getAreaName(props) {
-  const n03Name = composeN03Name(props);
-  if (n03Name) {
-    return n03Name;
-  }
-  for (const key of AREA_NAME_KEYS) {
-    if (props[key]) {
-      return String(props[key]).trim();
-    }
-  }
-  return "";
-}
-
-function getMunicipality(props, fallbackName = "") {
-  const n03Name = composeN03Name(props);
-  if (n03Name) {
-    return canonicalMunicipality(n03Name);
-  }
-  for (const key of MUNICIPALITY_KEYS) {
-    if (props[key]) {
-      return canonicalMunicipality(String(props[key]));
-    }
-  }
-  return canonicalMunicipality(fallbackName);
-}
-
-function getMunicipalityFromProps(props) {
-  return canonicalMunicipality(
-    String(props?.municipality || props?.area_name || props?.市区 || props?.N03_004 || composeN03Name(props) || "")
-  );
-}
-
-function composeN03Name(props) {
-  const city = String(props.N03_004 || "").trim();
-  const ward = String(props.N03_005 || "").trim();
-  if (city && ward) {
-    return `${city}${ward}`;
-  }
-  return city || "";
-}
-
-function extractTownName(props, areaName, municipality) {
-  const direct = String(props.town_name || props.S_NAME || props.町 || "").trim();
-  if (direct) {
-    return direct;
-  }
-
-  const name = String(areaName || "").trim();
-  const muni = String(municipality || "").trim();
-  if (name && muni && name.startsWith(muni) && name.length > muni.length) {
-    return name.slice(muni.length).trim();
-  }
-  return "";
-}
-
 function getDispatchAreaLabel(props, municipality, townName, postalCodes = []) {
   const inline = String(
     props.dispatch_area_label || props.dispatch_area || props.group_label || props.対応エリア || ""
@@ -1069,108 +768,6 @@ function lookupPostalCodes(municipality, townName) {
   return state.asisPostalCodesByTown.get(`${muni}|${town}`) || [];
 }
 
-function canonicalMunicipality(value) {
-  return canonicalAreaName(value);
-}
-
-function canonicalTownName(value) {
-  let out = String(value || "").trim();
-  if (!out || out === "以下に掲載がない場合") {
-    return "";
-  }
-  out = out.replace(/[\s　]/g, "");
-  out = out.replace(/ヶ/g, "ケ").replace(/ヵ/g, "ケ").replace(/ｹ/g, "ケ");
-  out = out.replace(/之/g, "の");
-  out = out.replace(/[0-9０-９]+丁目$/g, "");
-  out = out.replace(/[一二三四五六七八九十]+丁目$/g, "");
-  return out;
-}
-
-function normalizeZip(value) {
-  const digits = String(value).replace(/[^\d]/g, "");
-  if (digits.length >= 7) {
-    return digits.slice(0, 7);
-  }
-  return digits;
-}
-
-function formatPostalCode(zip) {
-  const digits = normalizeZip(zip);
-  if (digits.length !== 7) {
-    return "";
-  }
-  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}`;
-}
-
-function formatPostalCodes(codes) {
-  const values = Array.isArray(codes) ? codes : [];
-  const formatted = values.map((value) => formatPostalCode(value)).filter(Boolean);
-  if (formatted.length === 0) {
-    return "-";
-  }
-  return [...new Set(formatted)].join(" / ");
-}
-
-function extractDepot(props) {
-  const values = [
-    props.depot,
-    props.depot_code,
-    props.depot_name,
-    props.担当デポ,
-    props.管轄デポ,
-    props.管轄,
-  ];
-  for (const value of values) {
-    const code = normalizeDepotCode(value);
-    if (code) {
-      return code;
-    }
-  }
-  return "";
-}
-
-function normalizeDepotCode(value) {
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
-  }
-
-  const upper = raw.toUpperCase();
-  if (DEPOTS[upper]) {
-    return upper;
-  }
-  if (upper.includes("SGM")) {
-    return "SGM";
-  }
-  if (upper.includes("FUJ")) {
-    return "FUJ";
-  }
-  if (upper.includes("YOK")) {
-    return "YOK";
-  }
-  if (raw.includes("相模原")) {
-    return "SGM";
-  }
-  if (raw.includes("藤沢")) {
-    return "FUJ";
-  }
-  if (raw.includes("横浜港北")) {
-    return "YOK";
-  }
-  return "";
-}
-
-function formatAreaIdForDisplay(areaId) {
-  const raw = String(areaId || "");
-  if (!raw) {
-    return "";
-  }
-  if (raw.startsWith("name:") || raw.startsWith("feature:")) {
-    return raw;
-  }
-  return raw.replace(/^(KA\d+|TK\d+|SA\d+|CB\d+|N03|KA|TK|SA|CB)-/i, "");
-}
-
 function tooltipText(areaId) {
   const meta = state.areaMeta.get(areaId);
   if (!meta) {
@@ -1204,15 +801,6 @@ function buildPopupHtml(areaId) {
     `<dt>Depot</dt><dd>${escapeHtml(depotName)}</dd>`,
     "</dl>",
   ].join("");
-}
-
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }
 
 function styleForArea(areaId) {
@@ -1545,39 +1133,6 @@ function addNameIndex(key, areaId) {
     state.nameIndex.set(key, new Set());
   }
   state.nameIndex.get(key).add(areaId);
-}
-
-function normalizeMatchKey(value) {
-  return String(value || "")
-    .replace(/[\s　]/g, "")
-    .toLowerCase();
-}
-
-function canonicalAreaName(value) {
-  let out = String(value || "").trim();
-  out = out.replace(/[\s　]/g, "");
-  out = out.replace(/\(.*?\)/g, "");
-  out = out.replace(/（.*?）/g, "");
-  out = out.replace(/^東京都/, "");
-  out = out.replace(/^神奈川県/, "");
-
-  if (out === "町田") {
-    out = "町田市";
-  }
-  if (out === "藤沢") {
-    out = "藤沢市";
-  }
-  if (/^横浜.+区$/.test(out) && !out.startsWith("横浜市")) {
-    out = out.replace(/^横浜/, "横浜市");
-  }
-  if (/^川崎.+区$/.test(out) && !out.startsWith("川崎市")) {
-    out = out.replace(/^川崎/, "川崎市");
-  }
-  if (/^相模原.+区$/.test(out) && !out.startsWith("相模原市")) {
-    out = out.replace(/^相模原/, "相模原市");
-  }
-
-  return out;
 }
 
 function exportAssignmentsCsv() {

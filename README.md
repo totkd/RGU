@@ -19,7 +19,7 @@
 - `Undo / Redo`（選択状態の履歴）
 - `All Reset`（初期割当へ復元 + 選択解除）
 - 拠点ピン（SGM / FUJ / YOK）を固定表示
-- 市区町村境界（東京+神奈川）をデフォルトOverlay表示
+- 市区町村境界（神奈川+東京+千葉+埼玉）をデフォルトOverlay表示
 - `Download CSV` で割当結果を出力
 
 ### 操作フロー
@@ -85,7 +85,7 @@
 - 既定表示都県は `神奈川県` と `東京都`（`Polygon Visibility`で切替）
 - `Undo / Redo` は**選択履歴**を管理（割当履歴ではない）
 - `All Reset` は初期割当復元 + 選択解除 + 履歴初期化
-- 市区町村境界は `data/n03_tokyo_kanagawa_admin_areas.geojson` を既定Overlay表示
+- 市区町村境界は `data/n03_tokyo_kanagawa_admin_areas.geojson` を既定Overlay表示（神奈川+東京+千葉+埼玉）
 - 町域ポリゴンは運用対象外もクリック選択可能
 - デポ割当は運用対象自治体（`data/n03_target_admin_areas.geojson` ベース）にのみ反映
 - 運用対象外町域の既定ボーダーは「うっすら可視」スタイル（クリック時は強調）
@@ -104,7 +104,9 @@
 ### 主要ファイル
 - `/Users/tomoki/src/RGU/index.html`: UI構造
 - `/Users/tomoki/src/RGU/styles.css`: スタイル
-- `/Users/tomoki/src/RGU/app.js`: クライアントロジック
+- `/Users/tomoki/src/RGU/app.js`: クライアントロジック（地図/UI制御）
+- `/Users/tomoki/src/RGU/src/config.js`: 定数定義（拠点・地図タイル・キー類）
+- `/Users/tomoki/src/RGU/src/utils.js`: 文字列正規化 / CSV / GeoJSONプロパティ解決ユーティリティ
 - `/Users/tomoki/src/RGU/asis.csv`: 既存割当マスタ
 - `/Users/tomoki/src/RGU/data/asis_fine_polygons.geojson`: 町域ポリゴン（現行は全域版）
 - `/Users/tomoki/src/RGU/data/n03_tokyo_kanagawa_admin_areas.geojson`: 市区町村境界Overlay（東京+神奈川）
@@ -151,12 +153,14 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
 ```
 
-### 市区町村境界Overlay再生成（東京+神奈川）
+### 市区町村境界Overlay再生成（神奈川+東京+千葉+埼玉）
 
 ```bash
 python3 /Users/tomoki/src/RGU/scripts/build_admin_boundary_geojson.py \
   --tokyo /Users/tomoki/src/RGU/data/n03_tokyo_kanagawa/tokyo/N03-20250101_13.geojson \
   --kanagawa /Users/tomoki/src/RGU/data/n03_tokyo_kanagawa/kanagawa/N03-20250101_14.geojson \
+  --fine-polygons /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson \
+  --extra-pref-names 埼玉県,千葉県 \
   --out /Users/tomoki/src/RGU/data/n03_tokyo_kanagawa_admin_areas.geojson
 ```
 
