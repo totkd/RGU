@@ -65,6 +65,7 @@ const state = {
   renderingLock: false,
   visibleFeatures: [],
   featureAreaIdMap: new WeakMap(),
+  layerAreaIdMap: new WeakMap(),
   areaToLayers: new Map(),
   areaToLayersLite: new Map(),
   areaToLayersDetail: new Map(),
@@ -101,6 +102,7 @@ const state = {
   },
   suppressClickUntilMs: 0,
   suppressContextMenuUntilMs: 0,
+  lastAreaClickAtMs: 0,
   loadingFlow: {
     token: "",
     active: false,
@@ -222,6 +224,7 @@ function setupEventHandlers() {
   });
   state.map.on("zoomstart", closeAllAreaTooltips);
   state.map.on("movestart", closeAllAreaTooltips);
+  state.map.on("click", handleMapClickFallback);
 
   updateHistoryButtons();
 }
@@ -849,6 +852,7 @@ function loadGeoJson(data, options = {}) {
   state.currentGeoLayer = null;
   state.visibleFeatures = [];
   state.featureAreaIdMap = new WeakMap();
+  state.layerAreaIdMap = new WeakMap();
   state.areaToLayersLite.clear();
   state.areaToLayersDetail.clear();
   state.areaToLayers.clear();
@@ -1030,6 +1034,7 @@ function buildGeoLayerForMode(mode) {
           layerMap.set(areaId, []);
         }
         layerMap.get(areaId).push(featureLayer);
+        state.layerAreaIdMap.set(featureLayer, areaId);
 
         featureLayer.on("click", () => handleAreaClick(areaId, featureLayer));
 
@@ -1154,6 +1159,7 @@ function handleAreaClick(areaId, layer) {
   if (Date.now() < state.suppressClickUntilMs) {
     return;
   }
+  state.lastAreaClickAtMs = Date.now();
 
   let changedSelection = false;
   if (state.selected.has(areaId)) {
@@ -1176,6 +1182,52 @@ function handleAreaClick(areaId, layer) {
   if (changedSelection) {
     pushSelectionHistory();
   }
+}
+
+function handleMapClickFallback(event) {
+  if (!event?.latlng || !state.currentGeoLayer || state.renderingLock) {
+    return;
+  }
+  const originalTarget = event?.originalEvent?.target;
+  if (originalTarget?.closest?.(".depot-pin")) {
+    return;
+  }
+  if (Date.now() - state.lastAreaClickAtMs < 80) {
+    return;
+  }
+
+  const hitLayer = findAreaLayerAtLatLng(event.latlng);
+  if (!hitLayer) {
+    return;
+  }
+  const areaId = state.layerAreaIdMap.get(hitLayer);
+  if (!areaId) {
+    return;
+  }
+  handleAreaClick(areaId, hitLayer);
+}
+
+function findAreaLayerAtLatLng(latlng) {
+  if (!state.currentGeoLayer || !state.map || !latlng) {
+    return null;
+  }
+  const point = state.map.latLngToLayerPoint(latlng);
+  let hitLayer = null;
+  state.currentGeoLayer.eachLayer((layer) => {
+    if (hitLayer || typeof layer?._containsPoint !== "function") {
+      return;
+    }
+    if (typeof layer.getBounds === "function") {
+      const bounds = layer.getBounds();
+      if (bounds && bounds.isValid && !bounds.contains(latlng)) {
+        return;
+      }
+    }
+    if (layer._containsPoint(point)) {
+      hitLayer = layer;
+    }
+  });
+  return hitLayer;
 }
 
 function beginBrushSelection(areaId, event, mode) {
