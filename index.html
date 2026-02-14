@@ -116,6 +116,13 @@
         </button>
         <button id="panel-backdrop" type="button" class="panel-backdrop" aria-label="Close Sidebar"></button>
         <div id="map"></div>
+        <div id="loading-overlay" class="loading-overlay" aria-live="polite" aria-atomic="true">
+          <div id="loading-card" class="loading-card" role="status">
+            <p class="loading-title">Loading...</p>
+            <p id="loading-step-tiles" class="loading-step is-pending">Map Tilesを読み込んでいます...</p>
+            <p id="loading-step-polygons" class="loading-step is-pending">東京都と神奈川県の町域ポリゴンを読み込んでいます...</p>
+          </div>
+        </div>
         <div class="legend">
           <span><i class="dot sgm"></i>SGM</span>
           <span><i class="dot fuj"></i>FUJ</span>

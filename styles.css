@@ -378,6 +378,79 @@ button.ghost.danger {
   height: 100dvh;
 }
 
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1240;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+}
+
+.loading-overlay.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.loading-overlay.is-closing {
+  opacity: 0;
+}
+
+.loading-card {
+  min-width: min(480px, calc(100vw - 40px));
+  max-width: min(560px, calc(100vw - 40px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #d2d8e3;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 36px rgba(9, 15, 26, 0.18);
+  backdrop-filter: blur(4px);
+}
+
+.loading-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #111827;
+}
+
+.loading-step {
+  margin: 0;
+  padding-left: 16px;
+  position: relative;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 500;
+  color: #495566;
+}
+
+.loading-step + .loading-step {
+  margin-top: 3px;
+}
+
+.loading-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.58em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #8f99a7;
+}
+
+.loading-step.is-done {
+  color: #1f4f38;
+}
+
+.loading-step.is-done::before {
+  background: #2f8746;
+}
+
 .panel-toggle {
   position: absolute;
   left: 12px;

@@ -31,6 +31,10 @@ import {
   pickCsvValue,
 } from "./src/utils.js";
 
+const LOADING_MIN_VISIBLE_MS = 600;
+const LOADING_FADE_OUT_MS = 220;
+const PREFECTURE_DISPLAY_ORDER = ["東京都", "神奈川県", "千葉県", "埼玉県"];
+
 const state = {
   map: null,
   baseLayers: new Map(),
@@ -69,6 +73,18 @@ const state = {
   },
   suppressClickUntilMs: 0,
   suppressContextMenuUntilMs: 0,
+  loadingFlow: {
+    token: "",
+    active: false,
+    scope: "",
+    startedAt: 0,
+    steps: {
+      tiles: "pending",
+      polygons: "pending",
+    },
+    closeTimerId: null,
+    hideTimerId: null,
+  },
   isMobileView: false,
   resizeTimerId: null,
 };
@@ -83,21 +99,31 @@ const el = {
   resetAll: document.getElementById("reset-all"),
   selectedCount: document.getElementById("selected-count"),
   selectedAreas: document.getElementById("selected-zips"),
+  loadingOverlay: document.getElementById("loading-overlay"),
+  loadingStepTiles: document.getElementById("loading-step-tiles"),
+  loadingStepPolygons: document.getElementById("loading-step-polygons"),
   basemapInputs: [...document.querySelectorAll('input[name="basemap"]')],
   prefectureVisibilityInputs: [...document.querySelectorAll('input[name="prefecture-visibility"]')],
 };
 
 init();
 
-function init() {
+async function init() {
+  const initialFlowToken = startLoadingFlow("initial", buildPolygonLoadingLabel("initial", state.visiblePrefectures));
+
   initMap();
+  const initialLayer = state.baseLayers.get(state.activeBasemapId) || null;
+  void waitForBasemapReady(initialLayer, 5000).then(() => {
+    setLoadingStepDone("tiles", "Map Tilesを読み込んでいます...", initialFlowToken);
+  });
+
   initDepotMarkers();
   setupEventHandlers();
   initResponsiveSidebarMode();
 
-  loadInScopeMunicipalities();
-  loadAsisAreaLabels();
-  loadDefaultGeoJson();
+  void loadInScopeMunicipalities();
+  void loadAsisAreaLabels();
+  await loadDefaultGeoJson(initialFlowToken);
 
   renderSelected();
 }
@@ -182,11 +208,14 @@ function handlePrefectureVisibilityChange() {
     return;
   }
   state.visiblePrefectures = next;
-  rebuildGeoLayerForVisibility();
+  const flowToken = startLoadingFlow("visibility", buildPolygonLoadingLabel("visibility", next));
+  setLoadingStepDone("tiles", "Map Tilesを読み込んでいます...", flowToken);
+  requestAnimationFrame(() => rebuildGeoLayerForVisibility(flowToken));
 }
 
-function rebuildGeoLayerForVisibility() {
+function rebuildGeoLayerForVisibility(flowToken = "") {
   if (!state.loadedGeoData) {
+    finishLoadingFlowSilently(flowToken);
     return;
   }
   const assignmentSnapshot = new Map(state.allAssignments);
@@ -198,9 +227,10 @@ function rebuildGeoLayerForVisibility() {
     preserveInitialAssignments: initialAssignmentsSnapshot,
     skipFitBounds: true,
   });
+  markPolygonsDoneAfterPaint(flowToken, buildPolygonLoadingLabel("visibility", state.visiblePrefectures));
 }
 
-async function loadDefaultGeoJson() {
+async function loadDefaultGeoJson(flowToken = "") {
   try {
     const res = await fetch("./data/asis_fine_polygons.geojson");
     if (!res.ok) {
@@ -209,9 +239,204 @@ async function loadDefaultGeoJson() {
     const data = await res.json();
     initializeAllAssignmentsFromData(data);
     loadGeoJson(data);
+    markPolygonsDoneAfterPaint(flowToken, buildPolygonLoadingLabel("initial", state.visiblePrefectures));
   } catch (_err) {
+    finishLoadingFlowSilently(flowToken);
     alert("Failed to load default data: data/asis_fine_polygons.geojson");
   }
+}
+
+function startLoadingFlow(scope, polygonLabel) {
+  clearLoadingFlowTimers();
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  state.loadingFlow.token = token;
+  state.loadingFlow.active = true;
+  state.loadingFlow.scope = scope;
+  state.loadingFlow.startedAt = Date.now();
+  state.loadingFlow.steps.tiles = "pending";
+  state.loadingFlow.steps.polygons = "pending";
+
+  if (el.loadingOverlay) {
+    el.loadingOverlay.classList.remove("is-closing");
+    el.loadingOverlay.classList.add("is-visible");
+  }
+
+  setLoadingStepPending("tiles", "Map Tilesを読み込んでいます...", token);
+  setLoadingStepPending("polygons", polygonLabel, token);
+  return token;
+}
+
+function setLoadingStepPending(stepKey, text, token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  state.loadingFlow.steps[stepKey] = "pending";
+  const node = getLoadingStepElement(stepKey);
+  if (!node) {
+    return;
+  }
+  node.classList.remove("is-done");
+  node.classList.add("is-pending");
+  node.textContent = String(text || "").trim();
+}
+
+function setLoadingStepDone(stepKey, text, token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  state.loadingFlow.steps[stepKey] = "done";
+  const node = getLoadingStepElement(stepKey);
+  if (node) {
+    node.classList.remove("is-pending");
+    node.classList.add("is-done");
+    node.textContent = toDoneText(text || node.textContent || "");
+  }
+
+  if (state.loadingFlow.steps.tiles === "done" && state.loadingFlow.steps.polygons === "done") {
+    finishLoadingFlowSilently(token);
+  }
+}
+
+function finishLoadingFlowSilently(token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+
+  clearLoadingFlowTimers();
+  const elapsed = Date.now() - state.loadingFlow.startedAt;
+  const waitMs = Math.max(0, LOADING_MIN_VISIBLE_MS - elapsed);
+
+  state.loadingFlow.closeTimerId = setTimeout(() => {
+    if (!isCurrentLoadingFlowToken(token)) {
+      return;
+    }
+
+    if (el.loadingOverlay) {
+      el.loadingOverlay.classList.add("is-closing");
+    }
+
+    state.loadingFlow.hideTimerId = setTimeout(() => {
+      if (!isCurrentLoadingFlowToken(token)) {
+        return;
+      }
+      if (el.loadingOverlay) {
+        el.loadingOverlay.classList.remove("is-visible", "is-closing");
+      }
+
+      state.loadingFlow.active = false;
+      state.loadingFlow.scope = "";
+      state.loadingFlow.startedAt = 0;
+      state.loadingFlow.steps.tiles = "pending";
+      state.loadingFlow.steps.polygons = "pending";
+      state.loadingFlow.closeTimerId = null;
+      state.loadingFlow.hideTimerId = null;
+    }, LOADING_FADE_OUT_MS);
+  }, waitMs);
+}
+
+function clearLoadingFlowTimers() {
+  if (state.loadingFlow.closeTimerId) {
+    clearTimeout(state.loadingFlow.closeTimerId);
+    state.loadingFlow.closeTimerId = null;
+  }
+  if (state.loadingFlow.hideTimerId) {
+    clearTimeout(state.loadingFlow.hideTimerId);
+    state.loadingFlow.hideTimerId = null;
+  }
+}
+
+function isCurrentLoadingFlowToken(token) {
+  return Boolean(token) && state.loadingFlow.active && state.loadingFlow.token === token;
+}
+
+function getLoadingStepElement(stepKey) {
+  if (stepKey === "tiles") {
+    return el.loadingStepTiles;
+  }
+  if (stepKey === "polygons") {
+    return el.loadingStepPolygons;
+  }
+  return null;
+}
+
+function toDoneText(value) {
+  const text = String(value || "").trim();
+  const normalized = text.replace(/\s*完了$/, "");
+  if (normalized.endsWith("...") || normalized.endsWith("…")) {
+    return `${normalized}完了`;
+  }
+  return `${normalized}...完了`;
+}
+
+function waitForBasemapReady(layer, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (!layer) {
+      resolve();
+      return;
+    }
+
+    let settled = false;
+    let timerId = null;
+    const cleanup = () => {
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+      layer.off("load", handleDone);
+      layer.off("tileerror", handleDone);
+    };
+    const handleDone = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    if (typeof layer.isLoading === "function" && !layer.isLoading()) {
+      handleDone();
+      return;
+    }
+
+    layer.once("load", handleDone);
+    layer.once("tileerror", handleDone);
+    timerId = setTimeout(handleDone, Math.max(400, timeoutMs));
+  });
+}
+
+function markPolygonsDoneAfterPaint(token, label) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  const done = () => setLoadingStepDone("polygons", label, token);
+  requestAnimationFrame(() => requestAnimationFrame(done));
+}
+
+function buildPolygonLoadingLabel(scope, visiblePrefectures) {
+  if (scope === "initial") {
+    return "東京都と神奈川県の町域ポリゴンを読み込んでいます...";
+  }
+
+  const values = Array.from(visiblePrefectures || []).filter(Boolean);
+  if (values.length === 0) {
+    return "選択中都県の町域ポリゴンを読み込んでいます...";
+  }
+
+  const sorted = values.sort((a, b) => {
+    const ai = PREFECTURE_DISPLAY_ORDER.indexOf(a);
+    const bi = PREFECTURE_DISPLAY_ORDER.indexOf(b);
+    const aa = ai >= 0 ? ai : 99;
+    const bb = bi >= 0 ? bi : 99;
+    if (aa !== bb) {
+      return aa - bb;
+    }
+    return a.localeCompare(b, "ja");
+  });
+
+  if (sorted.length <= 2) {
+    return `${sorted.join("と")}の町域ポリゴンを読み込んでいます...`;
+  }
+  return "選択中都県の町域ポリゴンを読み込んでいます...";
 }
 
 function initializeAllAssignmentsFromData(data) {
