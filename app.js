@@ -1006,7 +1006,8 @@ function activateLayer(mode) {
 
 function buildGeoLayerForMode(mode) {
   const normalizedMode = mode === "detail" ? "detail" : "lite";
-  const interactive = normalizedMode === "detail";
+  const interactive = true;
+  const enableBrush = normalizedMode === "detail";
   const layerMap = normalizedMode === "detail" ? state.areaToLayersDetail : state.areaToLayersLite;
   layerMap.clear();
 
@@ -1029,7 +1030,9 @@ function buildGeoLayerForMode(mode) {
         }
         layerMap.get(areaId).push(featureLayer);
 
-        if (!interactive) {
+        featureLayer.on("click", () => handleAreaClick(areaId, featureLayer));
+
+        if (!enableBrush) {
           return;
         }
 
@@ -1040,7 +1043,6 @@ function buildGeoLayerForMode(mode) {
         featureLayer.on("contextmenu", (event) => {
           event?.originalEvent?.preventDefault();
         });
-        featureLayer.on("click", () => handleAreaClick(areaId, featureLayer));
         featureLayer.bindTooltip(tooltipText(areaId), {
           sticky: false,
           direction: "top",
