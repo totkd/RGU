@@ -6,31 +6,32 @@
 ![Data](https://img.shields.io/badge/Data-GeoJSON%20%2B%20CSV-2563eb)
 
 配送エリアを地図上で調整するための運用ツールです。  
-神奈川県 + 東京都町田市の町域ポリゴンを表示し、`SGM / FUJ / YOK` の担当割当を編集してCSVで出力できます。
+現在の既定データでは、**神奈川県 + 東京都全域**の町域ポリゴンを表示し、`SGM / FUJ / YOK` の担当割当を編集してCSV出力できます。
 
 ---
 
 ## 一般向けガイド
 
 ### できること
-- 町域ポリゴンをクリックして複数選択
-- 選択町域を `SGM / FUJ / YOK` に一括割当
+- 町域ポリゴンをクリックして複数選択（運用対象外エリアも選択可能）
+- 選択町域を `SGM / FUJ / YOK` に一括割当（割当は運用対象エリアのみ反映）
 - `Undo / Redo`（選択状態の履歴）
 - `All Reset`（初期割当へ復元 + 選択解除）
-- 拠点ピン（SGM/FUJ/YOK）を固定表示
+- 拠点ピン（SGM / FUJ / YOK）を固定表示
+- 市区町村境界（東京+神奈川）をデフォルトOverlay表示
 - `Download CSV` で割当結果を出力
 
 ### 操作フロー
 1. `Map Tiles` で背景地図を選ぶ
 2. 地図上の町域をクリックして選択
-3. `Zone Select` でデポを割り当て
+3. `Zone Select` でデポを割り当てる
 4. 必要に応じて `Undo / Redo` で調整
 5. `Download CSV` で結果を保存
 
 ### 画面の見方
 - `Map Tiles`: 背景地図の切替
-- `Zone Select`: 選択件数・割当操作・Undo/Redo・All Reset
-- `Stats`: 全体件数/割当済み/未割当/デポ別件数
+- `Zone Select`: 選択件数・割当操作・Undo / Redo・All Reset
+- `Stats`: 全体件数 / 割当済み / 未割当 / デポ別件数
 - `Selected Zones`: 現在選択中の町域一覧
 
 ### CSV出力列
@@ -48,20 +49,20 @@
 - Production: [https://rgu-chi.vercel.app/](https://rgu-chi.vercel.app/)
 - Hosting: Vercel（Static）
 
-### Vercel運用（このプロジェクトの標準）
+### Vercel運用（標準）
 
 #### 反映の流れ
-1. GitHubにpush
+1. GitHubへpush
 2. Vercelが自動デプロイ
-3. `main` へマージ後、Productionが更新
+3. `main` へ反映された変更がProductionに適用
 
 #### 推奨ワークフロー
 1. 作業ブランチをpush
-2. Vercel Preview URLで動作確認
+2. Vercel Preview URLで確認
 3. PR作成・レビュー
 4. `main` マージで本番反映
 
-#### 初回セットアップの要点
+#### 初回セットアップ要点
 - VercelでGitHubリポジトリ `totkd/RGU` をImport
 - Framework Preset: `Other`
 - Root Directory: `./`
@@ -74,15 +75,21 @@
 - `/app.js`, `/styles.css`: `max-age=300`
 - `/data/*.geojson`, `/data/*.csv`: `max-age=60`
 
-これにより、UI変更は比較的すぐ反映しつつ、巨大GeoJSONも短時間キャッシュで配信します。
+---
 
-### 実装仕様（現行）
+### 現行仕様（実装）
 - 起動時に `data/asis_fine_polygons.geojson` を自動読込
 - 既定ベースマップは `Esri ワールドストリート`
 - `Undo / Redo` は**選択履歴**を管理（割当履歴ではない）
 - `All Reset` は初期割当復元 + 選択解除 + 履歴初期化
-- 市区境界は別レイヤで太線表示（ズーム連動強調）
-- 対象外自治体ポリゴンは非活性（選択/割当不可）
+- 市区町村境界は `data/n03_tokyo_kanagawa_admin_areas.geojson` を既定Overlay表示
+- 町域ポリゴンは運用対象外もクリック選択可能
+- デポ割当は運用対象自治体（`data/n03_target_admin_areas.geojson` ベース）にのみ反映
+- 運用対象外町域の既定ボーダーは「うっすら可視」スタイル（クリック時は強調）
+
+### Popupの表示仕様
+- 運用対象エリア: `Town / Area / Depot`
+- 運用対象外エリア: `Town` のみ簡易表示
 
 ### Area（ブロック名）解決ロジック
 ポップアップの `Area` は次の優先順で解決。
@@ -93,13 +100,15 @@
 
 ### 主要ファイル
 - `/Users/tomoki/src/RGU/index.html`: UI構造
-- `/Users/tomoki/src/RGU/styles.css`: デザイン
+- `/Users/tomoki/src/RGU/styles.css`: スタイル
 - `/Users/tomoki/src/RGU/app.js`: クライアントロジック
 - `/Users/tomoki/src/RGU/asis.csv`: 既存割当マスタ
-- `/Users/tomoki/src/RGU/data/asis_fine_polygons.geojson`: 運用主データ
-- `/Users/tomoki/src/RGU/data/n03_tokyo_kanagawa_admin_areas.geojson`: 東京+神奈川の市区町村境界（地図Overlay用）
-- `/Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson`: 市区境界/フォールバック
+- `/Users/tomoki/src/RGU/data/asis_fine_polygons.geojson`: 町域ポリゴン（現行は全域版）
+- `/Users/tomoki/src/RGU/data/n03_tokyo_kanagawa_admin_areas.geojson`: 市区町村境界Overlay（東京+神奈川）
+- `/Users/tomoki/src/RGU/data/n03_target_admin_areas.geojson`: 運用対象自治体定義 / フォールバック
 - `/Users/tomoki/src/RGU/data/asis_admin_assignments.csv`: 初期割当補助
+- `/Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py`: 町域ポリゴン生成
+- `/Users/tomoki/src/RGU/scripts/build_admin_boundary_geojson.py`: 市区町村境界生成
 
 ### 町域データ再生成
 `asis.csv` と町域データから `asis_fine_polygons.geojson` を再生成できます。
@@ -116,11 +125,11 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
 ```
 
 補足:
-- `--tokyo-town-geojson` は `.geojson` と `.zip`（e-Stat配布ZIP）両対応
-- 東京都町域がない場合は `--n03-fallback` へフォールバック
+- `--tokyo-town-geojson` は `.geojson` と `.zip`（e-Stat配布ZIP）に対応
+- 東京町域が読めない場合は `--n03-fallback` でフォールバック
 - `--coverage-mode`:
-  - `operational`（既定）: SGM/FUJ/YOKの運用対象自治体中心で生成
-  - `full`: 神奈川全域 + 東京全域を生成（対象外町域もクリック反応させたいときに利用）
+  - `operational`（既定）: 運用対象自治体中心で生成
+  - `full`: 神奈川全域 + 東京全域を生成
 
 全域生成（`full`）例:
 
@@ -135,7 +144,7 @@ python3 /Users/tomoki/src/RGU/scripts/build_fine_polygons_from_asis.py \
   --out /Users/tomoki/src/RGU/data/asis_fine_polygons.geojson
 ```
 
-市区町村境界Overlayデータ（東京+神奈川）再生成:
+### 市区町村境界Overlay再生成（東京+神奈川）
 
 ```bash
 python3 /Users/tomoki/src/RGU/scripts/build_admin_boundary_geojson.py \
@@ -145,5 +154,6 @@ python3 /Users/tomoki/src/RGU/scripts/build_admin_boundary_geojson.py \
 ```
 
 ### 既知の注意点
-- 町名の表記ゆれ（異体字/丁目表現差）で `Area` 解決がフォールバックになる場合あり
+- 町名の表記ゆれ（異体字 / 丁目表現差）で `Area` 解決がフォールバックになる場合あり
+- 運用対象外エリアのみを選択して割当しても、割当データは変化しない
 - 運用で表記が増えたら `asis.csv` を更新して再生成する運用を推奨
