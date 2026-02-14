@@ -1142,8 +1142,8 @@ function styleForArea(areaId) {
     weight: isOutOfScope ? 1.05 + borderBoost * 0.35 : selected ? 2.5 + borderBoost * 0.8 : 1.25 + borderBoost * 0.7,
     dashArray: isOutOfScope ? "" : selected ? "4 3" : "",
     fillColor: baseColor,
-    fillOpacity: isOutOfScope ? 0.012 : Math.min(0.5, activeFill * fujScale),
-    opacity: isOutOfScope ? 0.36 : 0.86,
+    fillOpacity: isOutOfScope ? 0.008 : Math.min(0.5, activeFill * fujScale),
+    opacity: isOutOfScope ? 0.3 : 0.86,
   };
 }
 
