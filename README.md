@@ -1,7 +1,7 @@
 # AreaKit
 
 [![Deploy](https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel&style=flat)](https://rgu-chi.vercel.app/)
-![Last Commit](https://img.shields.io/github/last-commit/totkd/RGU?logo=github&style=flat)
+![Last Commit](https://img.shields.io/github/last-commit/totkd/AreaKit?logo=github&style=flat)
 ![GION DELIVERY SERVICE](https://img.shields.io/badge/GION%20DELIVERY%20SERVICE-SGMDP-0ea5e9?style=flat)
 ![App](https://img.shields.io/badge/App-AreaKit-111827?style=flat)
 ![Map](https://img.shields.io/badge/Map-Leaflet-199900?style=flat)
@@ -66,7 +66,7 @@
 4. `main` マージで本番反映
 
 #### 初回セットアップ要点
-- VercelでGitHubリポジトリ `totkd/RGU` をImport
+- VercelでGitHubリポジトリ `totkd/AreaKit` をImport
 - Framework Preset: `Other`
 - Root Directory: `./`
 - Build Command: なし
