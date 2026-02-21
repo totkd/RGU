@@ -44,6 +44,15 @@ export const BASEMAPS = {
       maxZoom: 18,
     },
   },
+  gsi_blank: {
+    name: "地理院 白地図",
+    url: "https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png",
+    options: {
+      attribution:
+        '<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a>',
+      maxZoom: 18,
+    },
+  },
   gsi_seamless: {
     name: "地理院 シームレス写真",
     url: "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
@@ -59,6 +68,15 @@ export const BASEMAPS = {
     options: {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
+    },
+  },
+  osm_hot: {
+    name: "OSM Humanitarian",
+    url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+    options: {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, Tiles style by <a href="https://www.hotosm.org/" target="_blank" rel="noopener noreferrer">Humanitarian OpenStreetMap Team</a>',
       maxZoom: 19,
     },
   },

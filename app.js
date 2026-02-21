@@ -33,6 +33,7 @@ import {
 
 const LOADING_MIN_VISIBLE_MS = 600;
 const LOADING_FADE_OUT_MS = 220;
+const LOADING_DOT_INTERVAL_MS = 100;
 const PREFECTURE_DISPLAY_ORDER = ["東京都", "神奈川県", "千葉県", "埼玉県"];
 const DETAIL_ENTER_ZOOM = 13;
 const DETAIL_EXIT_ZOOM = 12;
@@ -56,24 +57,24 @@ const DETAIL_STYLE = Object.freeze({
 });
 const BORDER_PRESETS = Object.freeze({
   default: Object.freeze({
-    shiku: Object.freeze({ width: 2.9, opacity: 0.86, style: "solid", color: "#44566c" }),
+    shiku: Object.freeze({ width: 2.9, opacity: 0.86, color: "#44566c" }),
     block: Object.freeze({ width: 1.0, opacity: 0.86, style: "solid", color: "#44566c" }),
-    fill: Object.freeze({ inScope: 1.0, outOfScope: 1.0 }),
+    fill: Object.freeze({ inScope: 1.0 }),
   }),
   thin: Object.freeze({
-    shiku: Object.freeze({ width: 1.8, opacity: 0.62, style: "solid", color: "#5f6f82" }),
+    shiku: Object.freeze({ width: 1.8, opacity: 0.62, color: "#5f6f82" }),
     block: Object.freeze({ width: 0.72, opacity: 0.62, style: "solid", color: "#5f6f82" }),
-    fill: Object.freeze({ inScope: 0.85, outOfScope: 0.8 }),
+    fill: Object.freeze({ inScope: 0.85 }),
   }),
   bold: Object.freeze({
-    shiku: Object.freeze({ width: 3.6, opacity: 0.95, style: "solid", color: "#2f4056" }),
+    shiku: Object.freeze({ width: 3.6, opacity: 0.95, color: "#2f4056" }),
     block: Object.freeze({ width: 1.45, opacity: 0.95, style: "solid", color: "#2f4056" }),
-    fill: Object.freeze({ inScope: 1.12, outOfScope: 1.12 }),
+    fill: Object.freeze({ inScope: 1.12 }),
   }),
   "high-contrast": Object.freeze({
-    shiku: Object.freeze({ width: 3.0, opacity: 1.0, style: "solid", color: "#111827" }),
+    shiku: Object.freeze({ width: 3.0, opacity: 1.0, color: "#111827" }),
     block: Object.freeze({ width: 1.35, opacity: 1.0, style: "solid", color: "#111827" }),
-    fill: Object.freeze({ inScope: 1.0, outOfScope: 1.25 }),
+    fill: Object.freeze({ inScope: 1.0 }),
   }),
 });
 
@@ -138,6 +139,8 @@ const state = {
     },
     closeTimerId: null,
     hideTimerId: null,
+    dotTimerId: null,
+    dotFrame: 0,
   },
   isMobileView: false,
   resizeTimerId: null,
@@ -164,6 +167,7 @@ const el = {
   selectedCount: document.getElementById("selected-count"),
   selectedAreas: document.getElementById("selected-zips"),
   loadingOverlay: document.getElementById("loading-overlay"),
+  loadingTitle: document.getElementById("loading-title"),
   loadingStepTiles: document.getElementById("loading-step-tiles"),
   loadingStepPolygons: document.getElementById("loading-step-polygons"),
   basemapInputs: [...document.querySelectorAll('input[name="basemap"]')],
@@ -173,7 +177,6 @@ const el = {
   shikuWidthValue: document.getElementById("shiku-width-value"),
   shikuOpacity: document.getElementById("shiku-opacity"),
   shikuOpacityValue: document.getElementById("shiku-opacity-value"),
-  shikuStyle: document.getElementById("shiku-style"),
   shikuColor: document.getElementById("shiku-color"),
   blockWidth: document.getElementById("block-width"),
   blockWidthValue: document.getElementById("block-width-value"),
@@ -183,8 +186,6 @@ const el = {
   blockColor: document.getElementById("block-color"),
   fillInScope: document.getElementById("fill-inscope"),
   fillInScopeValue: document.getElementById("fill-inscope-value"),
-  fillOutOfScope: document.getElementById("fill-outscope"),
-  fillOutOfScopeValue: document.getElementById("fill-outscope-value"),
 };
 
 init();
@@ -292,17 +293,13 @@ function setupBorderSettingsHandlers() {
   }
 
   bindRangeControl(el.shikuWidth, (value) => {
-    state.borderSettings.shiku.width = clamp(toNumber(value, state.borderSettings.shiku.width), 0.2, 3.0);
+    state.borderSettings.shiku.width = clamp(toNumber(value, state.borderSettings.shiku.width), 0.2, 6.0);
     renderBorderSettingsValueLabels();
     scheduleBorderRefresh({ shiku: true });
   });
   bindRangeControl(el.shikuOpacity, (value) => {
     state.borderSettings.shiku.opacity = clamp(toNumber(value, state.borderSettings.shiku.opacity), 0, 1);
     renderBorderSettingsValueLabels();
-    scheduleBorderRefresh({ shiku: true });
-  });
-  bindSelectControl(el.shikuStyle, (value) => {
-    state.borderSettings.shiku.style = normalizeBorderStyle(value);
     scheduleBorderRefresh({ shiku: true });
   });
   bindColorControl(el.shikuColor, (value) => {
@@ -330,12 +327,7 @@ function setupBorderSettingsHandlers() {
   });
 
   bindRangeControl(el.fillInScope, (value) => {
-    state.borderSettings.fill.inScope = clamp(toNumber(value, state.borderSettings.fill.inScope), 0, 1);
-    renderBorderSettingsValueLabels();
-    scheduleBorderRefresh({ block: true });
-  });
-  bindRangeControl(el.fillOutOfScope, (value) => {
-    state.borderSettings.fill.outOfScope = clamp(toNumber(value, state.borderSettings.fill.outOfScope), 0, 1);
+    state.borderSettings.fill.inScope = clamp(toNumber(value, state.borderSettings.fill.inScope), 0, 3);
     renderBorderSettingsValueLabels();
     scheduleBorderRefresh({ block: true });
   });
@@ -383,9 +375,6 @@ function syncBorderSettingsUiFromState() {
   if (el.shikuOpacity) {
     el.shikuOpacity.value = String(settings.shiku.opacity);
   }
-  if (el.shikuStyle) {
-    el.shikuStyle.value = settings.shiku.style;
-  }
   if (el.shikuColor) {
     el.shikuColor.value = settings.shiku.color;
   }
@@ -403,9 +392,6 @@ function syncBorderSettingsUiFromState() {
   }
   if (el.fillInScope) {
     el.fillInScope.value = String(settings.fill.inScope);
-  }
-  if (el.fillOutOfScope) {
-    el.fillOutOfScope.value = String(settings.fill.outOfScope);
   }
   renderBorderSettingsValueLabels();
 }
@@ -425,9 +411,6 @@ function renderBorderSettingsValueLabels() {
   }
   if (el.fillInScopeValue) {
     el.fillInScopeValue.textContent = state.borderSettings.fill.inScope.toFixed(2);
-  }
-  if (el.fillOutOfScopeValue) {
-    el.fillOutOfScopeValue.textContent = state.borderSettings.fill.outOfScope.toFixed(2);
   }
 }
 
@@ -514,14 +497,17 @@ function startLoadingFlow(scope, polygonLabel) {
   state.loadingFlow.startedAt = Date.now();
   state.loadingFlow.steps.tiles = "pending";
   state.loadingFlow.steps.polygons = "pending";
+  state.loadingFlow.dotFrame = 0;
 
   if (el.loadingOverlay) {
     el.loadingOverlay.classList.remove("is-closing");
     el.loadingOverlay.classList.add("is-visible");
   }
 
+  setLoadingTitlePending("Loading", token);
   setLoadingStepPending("tiles", "Map Tilesを読み込んでいます...", token);
   setLoadingStepPending("polygons", polygonLabel, token);
+  startLoadingDots(token);
   return token;
 }
 
@@ -536,7 +522,8 @@ function setLoadingStepPending(stepKey, text, token = state.loadingFlow.token) {
   }
   node.classList.remove("is-done");
   node.classList.add("is-pending");
-  node.textContent = String(text || "").trim();
+  node.dataset.loadingBase = normalizeLoadingPendingText(text);
+  renderLoadingDotsFrame(token);
 }
 
 function setLoadingStepDone(stepKey, text, token = state.loadingFlow.token) {
@@ -548,6 +535,7 @@ function setLoadingStepDone(stepKey, text, token = state.loadingFlow.token) {
   if (node) {
     node.classList.remove("is-pending");
     node.classList.add("is-done");
+    delete node.dataset.loadingBase;
     node.textContent = toDoneText(text || node.textContent || "");
   }
 
@@ -582,6 +570,7 @@ function finishLoadingFlowSilently(token = state.loadingFlow.token) {
         el.loadingOverlay.classList.remove("is-visible", "is-closing");
       }
 
+      stopLoadingDots();
       state.loadingFlow.active = false;
       state.loadingFlow.scope = "";
       state.loadingFlow.startedAt = 0;
@@ -602,6 +591,7 @@ function clearLoadingFlowTimers() {
     clearTimeout(state.loadingFlow.hideTimerId);
     state.loadingFlow.hideTimerId = null;
   }
+  stopLoadingDots();
 }
 
 function isCurrentLoadingFlowToken(token) {
@@ -616,6 +606,65 @@ function getLoadingStepElement(stepKey) {
     return el.loadingStepPolygons;
   }
   return null;
+}
+
+function setLoadingTitlePending(text, token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token) || !el.loadingTitle) {
+    return;
+  }
+  el.loadingTitle.dataset.loadingBase = normalizeLoadingPendingText(text || "Loading");
+  renderLoadingDotsFrame(token);
+}
+
+function startLoadingDots(token = state.loadingFlow.token) {
+  stopLoadingDots();
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  renderLoadingDotsFrame(token);
+  state.loadingFlow.dotTimerId = setInterval(() => {
+    if (!isCurrentLoadingFlowToken(token)) {
+      stopLoadingDots();
+      return;
+    }
+    state.loadingFlow.dotFrame += 1;
+    renderLoadingDotsFrame(token);
+  }, LOADING_DOT_INTERVAL_MS);
+}
+
+function stopLoadingDots() {
+  if (state.loadingFlow.dotTimerId) {
+    clearInterval(state.loadingFlow.dotTimerId);
+    state.loadingFlow.dotTimerId = null;
+  }
+}
+
+function renderLoadingDotsFrame(token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  const dots = ".".repeat((state.loadingFlow.dotFrame % 3) + 1);
+  if (el.loadingTitle) {
+    const base = el.loadingTitle.dataset.loadingBase || "Loading";
+    el.loadingTitle.textContent = `${base}${dots}`;
+  }
+  ["tiles", "polygons"].forEach((stepKey) => {
+    if (state.loadingFlow.steps[stepKey] !== "pending") {
+      return;
+    }
+    const node = getLoadingStepElement(stepKey);
+    if (!node) {
+      return;
+    }
+    const base = node.dataset.loadingBase || normalizeLoadingPendingText(node.textContent || "");
+    node.dataset.loadingBase = base;
+    node.textContent = `${base}${dots}`;
+  });
+}
+
+function normalizeLoadingPendingText(value) {
+  const text = String(value || "").trim();
+  return text.replace(/\s*完了$/, "").replace(/[.。…\s]+$/, "");
 }
 
 function toDoneText(value) {
@@ -771,7 +820,8 @@ function setSidebarCollapsed(collapsed) {
 
 function updatePanelToggleLabel() {
   const collapsed = el.layout.classList.contains("panel-collapsed");
-  el.panelToggle.textContent = collapsed ? "Show Sidebar" : "Hide Sidebar";
+  el.panelToggle.dataset.collapsed = collapsed ? "true" : "false";
+  el.panelToggle.setAttribute("aria-label", collapsed ? "Show Sidebar" : "Hide Sidebar");
   el.panelToggle.setAttribute("aria-expanded", String(!collapsed));
 }
 
@@ -796,6 +846,8 @@ function setBasemap(id) {
   el.basemapInputs.forEach((input) => {
     input.checked = input.value === state.activeBasemapId;
   });
+
+  scheduleBorderRefresh({ shiku: true, block: true });
 }
 
 function initDepotMarkers() {
@@ -809,6 +861,7 @@ function initDepotMarkers() {
     if (!depot) {
       return;
     }
+    const depotName = stripDepotCodeSuffix(depot.name, site.code);
 
     const marker = L.marker([site.lat, site.lng], {
       pane: "depotPinPane",
@@ -818,10 +871,10 @@ function initDepotMarkers() {
         iconSize: [56, 28],
         iconAnchor: [28, 14],
       }),
-      title: `${site.code} ${site.address}`,
+      title: `${site.code} ${depotName}`,
     });
 
-    marker.bindTooltip(`${site.code} ${depot.name}<br>${site.address}`, {
+    marker.bindTooltip(`${site.code} ${depotName}<br>${site.address}`, {
       direction: "top",
       offset: [0, -14],
       opacity: 0.95,
@@ -831,6 +884,16 @@ function initDepotMarkers() {
   });
 
   state.depotMarkerLayer.addTo(state.map);
+}
+
+function stripDepotCodeSuffix(name, code) {
+  const trimmed = String(name || "").trim();
+  const normalizedCode = String(code || "").trim();
+  if (!normalizedCode) {
+    return trimmed;
+  }
+  const pattern = new RegExp(`\\s*${normalizedCode}\\s*$`, "i");
+  return trimmed.replace(pattern, "").trim() || trimmed;
 }
 
 function bringDepotMarkersToFront() {
@@ -1806,7 +1869,8 @@ function styleForArea(areaId, mode = state.renderMode) {
   const weightScale = defaultStyle.weight > 0 ? style.weight / defaultStyle.weight : 1;
   const opacityScale = defaultStyle.opacity > 0 ? style.opacity / defaultStyle.opacity : 1;
   const block = state.borderSettings.block;
-  const fillScale = isOutOfScope ? state.borderSettings.fill.outOfScope : state.borderSettings.fill.inScope;
+  const boundaryColors = getEffectiveBoundaryColors();
+  const fillScale = isOutOfScope ? 1 : state.borderSettings.fill.inScope;
   const dashArray = BORDER_STYLE_DASH[normalizeBorderStyle(block.style)];
   const baseFillOpacity = isOutOfScope
     ? style.fillOpacity
@@ -1815,7 +1879,7 @@ function styleForArea(areaId, mode = state.renderMode) {
       : Math.min(0.5, style.fillOpacity * fujScale);
   const fillColor = isOutOfScope && (mode === "lite" || selected) ? "#8f98a5" : baseColor;
   return {
-    color: normalizeColor(block.color, "#44566c"),
+    color: boundaryColors.block,
     weight: clamp(block.width * weightScale, 0.2, 6),
     dashArray,
     fillColor,
@@ -1870,13 +1934,27 @@ async function drawMunicipalityBoundaryLayer(fallbackData) {
 
 function getMunicipalityBoundaryStyle() {
   const shiku = state.borderSettings.shiku;
+  const boundaryColors = getEffectiveBoundaryColors();
   return {
-    color: normalizeColor(shiku.color, "#44566c"),
+    color: boundaryColors.shiku,
     weight: clamp(toNumber(shiku.width, 2.9), 0.2, 6),
-    dashArray: BORDER_STYLE_DASH[normalizeBorderStyle(shiku.style)],
+    dashArray: "",
     opacity: clamp(toNumber(shiku.opacity, 0.86), 0, 1),
     fillOpacity: 0,
     interactive: false,
+  };
+}
+
+function getEffectiveBoundaryColors() {
+  if (state.activeBasemapId === "gsi_seamless") {
+    return {
+      shiku: "#f5f8ff",
+      block: "#e4ecfa",
+    };
+  }
+  return {
+    shiku: normalizeColor(state.borderSettings.shiku.color, "#44566c"),
+    block: normalizeColor(state.borderSettings.block.color, "#44566c"),
   };
 }
 
@@ -2309,8 +2387,14 @@ function createBorderSettingsFromPreset(presetKey = "default") {
   const preset = BORDER_PRESETS[key];
   return {
     preset: key,
-    shiku: { ...preset.shiku },
+    shiku: {
+      width: clamp(toNumber(preset?.shiku?.width, 2.9), 0.2, 6),
+      opacity: clamp(toNumber(preset?.shiku?.opacity, 0.86), 0, 1),
+      color: normalizeColor(preset?.shiku?.color, "#44566c"),
+    },
     block: { ...preset.block },
-    fill: { ...preset.fill },
+    fill: {
+      inScope: clamp(toNumber(preset?.fill?.inScope, 1), 0, 3),
+    },
   };
 }
