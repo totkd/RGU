@@ -33,6 +33,7 @@ import {
 
 const LOADING_MIN_VISIBLE_MS = 600;
 const LOADING_FADE_OUT_MS = 220;
+const LOADING_DOT_INTERVAL_MS = 320;
 const PREFECTURE_DISPLAY_ORDER = ["東京都", "神奈川県", "千葉県", "埼玉県"];
 const DETAIL_ENTER_ZOOM = 13;
 const DETAIL_EXIT_ZOOM = 12;
@@ -138,6 +139,8 @@ const state = {
     },
     closeTimerId: null,
     hideTimerId: null,
+    dotTimerId: null,
+    dotFrame: 0,
   },
   isMobileView: false,
   resizeTimerId: null,
@@ -164,6 +167,7 @@ const el = {
   selectedCount: document.getElementById("selected-count"),
   selectedAreas: document.getElementById("selected-zips"),
   loadingOverlay: document.getElementById("loading-overlay"),
+  loadingTitle: document.getElementById("loading-title"),
   loadingStepTiles: document.getElementById("loading-step-tiles"),
   loadingStepPolygons: document.getElementById("loading-step-polygons"),
   basemapInputs: [...document.querySelectorAll('input[name="basemap"]')],
@@ -514,14 +518,17 @@ function startLoadingFlow(scope, polygonLabel) {
   state.loadingFlow.startedAt = Date.now();
   state.loadingFlow.steps.tiles = "pending";
   state.loadingFlow.steps.polygons = "pending";
+  state.loadingFlow.dotFrame = 0;
 
   if (el.loadingOverlay) {
     el.loadingOverlay.classList.remove("is-closing");
     el.loadingOverlay.classList.add("is-visible");
   }
 
+  setLoadingTitlePending("Loading", token);
   setLoadingStepPending("tiles", "Map Tilesを読み込んでいます...", token);
   setLoadingStepPending("polygons", polygonLabel, token);
+  startLoadingDots(token);
   return token;
 }
 
@@ -536,7 +543,8 @@ function setLoadingStepPending(stepKey, text, token = state.loadingFlow.token) {
   }
   node.classList.remove("is-done");
   node.classList.add("is-pending");
-  node.textContent = String(text || "").trim();
+  node.dataset.loadingBase = normalizeLoadingPendingText(text);
+  renderLoadingDotsFrame(token);
 }
 
 function setLoadingStepDone(stepKey, text, token = state.loadingFlow.token) {
@@ -548,6 +556,7 @@ function setLoadingStepDone(stepKey, text, token = state.loadingFlow.token) {
   if (node) {
     node.classList.remove("is-pending");
     node.classList.add("is-done");
+    delete node.dataset.loadingBase;
     node.textContent = toDoneText(text || node.textContent || "");
   }
 
@@ -582,6 +591,7 @@ function finishLoadingFlowSilently(token = state.loadingFlow.token) {
         el.loadingOverlay.classList.remove("is-visible", "is-closing");
       }
 
+      stopLoadingDots();
       state.loadingFlow.active = false;
       state.loadingFlow.scope = "";
       state.loadingFlow.startedAt = 0;
@@ -602,6 +612,7 @@ function clearLoadingFlowTimers() {
     clearTimeout(state.loadingFlow.hideTimerId);
     state.loadingFlow.hideTimerId = null;
   }
+  stopLoadingDots();
 }
 
 function isCurrentLoadingFlowToken(token) {
@@ -616,6 +627,65 @@ function getLoadingStepElement(stepKey) {
     return el.loadingStepPolygons;
   }
   return null;
+}
+
+function setLoadingTitlePending(text, token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token) || !el.loadingTitle) {
+    return;
+  }
+  el.loadingTitle.dataset.loadingBase = normalizeLoadingPendingText(text || "Loading");
+  renderLoadingDotsFrame(token);
+}
+
+function startLoadingDots(token = state.loadingFlow.token) {
+  stopLoadingDots();
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  renderLoadingDotsFrame(token);
+  state.loadingFlow.dotTimerId = setInterval(() => {
+    if (!isCurrentLoadingFlowToken(token)) {
+      stopLoadingDots();
+      return;
+    }
+    state.loadingFlow.dotFrame += 1;
+    renderLoadingDotsFrame(token);
+  }, LOADING_DOT_INTERVAL_MS);
+}
+
+function stopLoadingDots() {
+  if (state.loadingFlow.dotTimerId) {
+    clearInterval(state.loadingFlow.dotTimerId);
+    state.loadingFlow.dotTimerId = null;
+  }
+}
+
+function renderLoadingDotsFrame(token = state.loadingFlow.token) {
+  if (!isCurrentLoadingFlowToken(token)) {
+    return;
+  }
+  const dots = ".".repeat((state.loadingFlow.dotFrame % 3) + 1);
+  if (el.loadingTitle) {
+    const base = el.loadingTitle.dataset.loadingBase || "Loading";
+    el.loadingTitle.textContent = `${base}${dots}`;
+  }
+  ["tiles", "polygons"].forEach((stepKey) => {
+    if (state.loadingFlow.steps[stepKey] !== "pending") {
+      return;
+    }
+    const node = getLoadingStepElement(stepKey);
+    if (!node) {
+      return;
+    }
+    const base = node.dataset.loadingBase || normalizeLoadingPendingText(node.textContent || "");
+    node.dataset.loadingBase = base;
+    node.textContent = `${base}${dots}`;
+  });
+}
+
+function normalizeLoadingPendingText(value) {
+  const text = String(value || "").trim();
+  return text.replace(/\s*完了$/, "").replace(/[.。…\s]+$/, "");
 }
 
 function toDoneText(value) {
@@ -796,6 +866,8 @@ function setBasemap(id) {
   el.basemapInputs.forEach((input) => {
     input.checked = input.value === state.activeBasemapId;
   });
+
+  scheduleBorderRefresh({ shiku: true, block: true });
 }
 
 function initDepotMarkers() {
@@ -809,6 +881,7 @@ function initDepotMarkers() {
     if (!depot) {
       return;
     }
+    const depotName = stripDepotCodeSuffix(depot.name, site.code);
 
     const marker = L.marker([site.lat, site.lng], {
       pane: "depotPinPane",
@@ -818,10 +891,10 @@ function initDepotMarkers() {
         iconSize: [56, 28],
         iconAnchor: [28, 14],
       }),
-      title: `${site.code} ${site.address}`,
+      title: `${site.code} ${depotName}`,
     });
 
-    marker.bindTooltip(`${site.code} ${depot.name}<br>${site.address}`, {
+    marker.bindTooltip(`${site.code} ${depotName}<br>${site.address}`, {
       direction: "top",
       offset: [0, -14],
       opacity: 0.95,
@@ -831,6 +904,16 @@ function initDepotMarkers() {
   });
 
   state.depotMarkerLayer.addTo(state.map);
+}
+
+function stripDepotCodeSuffix(name, code) {
+  const trimmed = String(name || "").trim();
+  const normalizedCode = String(code || "").trim();
+  if (!normalizedCode) {
+    return trimmed;
+  }
+  const pattern = new RegExp(`\\s*${normalizedCode}\\s*$`, "i");
+  return trimmed.replace(pattern, "").trim() || trimmed;
 }
 
 function bringDepotMarkersToFront() {
@@ -1806,6 +1889,7 @@ function styleForArea(areaId, mode = state.renderMode) {
   const weightScale = defaultStyle.weight > 0 ? style.weight / defaultStyle.weight : 1;
   const opacityScale = defaultStyle.opacity > 0 ? style.opacity / defaultStyle.opacity : 1;
   const block = state.borderSettings.block;
+  const boundaryColors = getEffectiveBoundaryColors();
   const fillScale = isOutOfScope ? state.borderSettings.fill.outOfScope : state.borderSettings.fill.inScope;
   const dashArray = BORDER_STYLE_DASH[normalizeBorderStyle(block.style)];
   const baseFillOpacity = isOutOfScope
@@ -1815,7 +1899,7 @@ function styleForArea(areaId, mode = state.renderMode) {
       : Math.min(0.5, style.fillOpacity * fujScale);
   const fillColor = isOutOfScope && (mode === "lite" || selected) ? "#8f98a5" : baseColor;
   return {
-    color: normalizeColor(block.color, "#44566c"),
+    color: boundaryColors.block,
     weight: clamp(block.width * weightScale, 0.2, 6),
     dashArray,
     fillColor,
@@ -1870,13 +1954,27 @@ async function drawMunicipalityBoundaryLayer(fallbackData) {
 
 function getMunicipalityBoundaryStyle() {
   const shiku = state.borderSettings.shiku;
+  const boundaryColors = getEffectiveBoundaryColors();
   return {
-    color: normalizeColor(shiku.color, "#44566c"),
+    color: boundaryColors.shiku,
     weight: clamp(toNumber(shiku.width, 2.9), 0.2, 6),
     dashArray: BORDER_STYLE_DASH[normalizeBorderStyle(shiku.style)],
     opacity: clamp(toNumber(shiku.opacity, 0.86), 0, 1),
     fillOpacity: 0,
     interactive: false,
+  };
+}
+
+function getEffectiveBoundaryColors() {
+  if (state.activeBasemapId === "gsi_seamless") {
+    return {
+      shiku: "#f5f8ff",
+      block: "#e4ecfa",
+    };
+  }
+  return {
+    shiku: normalizeColor(state.borderSettings.shiku.color, "#44566c"),
+    block: normalizeColor(state.borderSettings.block.color, "#44566c"),
   };
 }
 
