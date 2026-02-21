@@ -70,6 +70,96 @@
         </section>
 
         <section class="card">
+          <h2>Borderline Settings</h2>
+          <div class="settings-grid">
+            <div class="settings-row">
+              <label class="settings-label" for="border-preset">Preset</label>
+              <select id="border-preset" class="settings-select">
+                <option value="default">Default</option>
+                <option value="thin">Thin</option>
+                <option value="bold">Bold</option>
+                <option value="high-contrast">High Contrast</option>
+              </select>
+            </div>
+
+            <details id="settings-shiku" class="settings-accordion">
+              <summary>Shiku Boundary</summary>
+              <div class="settings-row">
+                <label class="settings-label" for="shiku-width">Width</label>
+                <div class="settings-control">
+                  <input id="shiku-width" type="range" min="0.2" max="3.0" step="0.1" />
+                  <span id="shiku-width-value" class="settings-value">2.9</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="shiku-opacity">Opacity</label>
+                <div class="settings-control">
+                  <input id="shiku-opacity" type="range" min="0" max="1" step="0.01" />
+                  <span id="shiku-opacity-value" class="settings-value">0.86</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="shiku-style">Style</label>
+                <select id="shiku-style" class="settings-select">
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="shiku-color">Color</label>
+                <input id="shiku-color" type="color" />
+              </div>
+            </details>
+
+            <details id="settings-block" class="settings-accordion">
+              <summary>Block Boundary</summary>
+              <div class="settings-row">
+                <label class="settings-label" for="block-width">Width</label>
+                <div class="settings-control">
+                  <input id="block-width" type="range" min="0.2" max="3.0" step="0.1" />
+                  <span id="block-width-value" class="settings-value">1.0</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="block-opacity">Opacity</label>
+                <div class="settings-control">
+                  <input id="block-opacity" type="range" min="0" max="1" step="0.01" />
+                  <span id="block-opacity-value" class="settings-value">0.86</span>
+                </div>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="block-style">Style</label>
+                <select id="block-style" class="settings-select">
+                  <option value="solid">Solid</option>
+                  <option value="dashed">Dashed</option>
+                  <option value="dotted">Dotted</option>
+                </select>
+              </div>
+              <div class="settings-row">
+                <label class="settings-label" for="block-color">Color</label>
+                <input id="block-color" type="color" />
+              </div>
+            </details>
+
+            <div class="settings-row">
+              <label class="settings-label" for="fill-inscope">In-scope Fill</label>
+              <div class="settings-control">
+                <input id="fill-inscope" type="range" min="0" max="1" step="0.01" />
+                <span id="fill-inscope-value" class="settings-value">1.00</span>
+              </div>
+            </div>
+            <div class="settings-row">
+              <label class="settings-label" for="fill-outscope">Out-of-scope Fill</label>
+              <div class="settings-control">
+                <input id="fill-outscope" type="range" min="0" max="1" step="0.01" />
+                <span id="fill-outscope-value" class="settings-value">1.00</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
           <div class="section-header">
             <h2>Zone Select</h2>
             <span class="info-tip" aria-hidden="true">

@@ -40,6 +40,8 @@ const RENDER_SWITCH_DEBOUNCE_MS = 100;
 const PREWARM_DELAY_MS = 120;
 const DETAIL_SMOOTH_FACTOR = 1.2;
 const LITE_SMOOTH_FACTOR = 1.7;
+const BORDER_STYLE_DASH = Object.freeze({ solid: "", dashed: "8 6", dotted: "2 6" });
+const BORDER_REFRESH_THROTTLE_MS = 120;
 const LITE_STYLE = Object.freeze({
   selected: Object.freeze({ weight: 1.45, opacity: 0.72, fillOpacity: 0.2 }),
   default: Object.freeze({ weight: 0.95, opacity: 0.46, fillOpacity: 0.075 }),
@@ -51,6 +53,28 @@ const DETAIL_STYLE = Object.freeze({
   default: Object.freeze({ weight: 1.55, opacity: 0.86, fillOpacity: 0.12, dashArray: "" }),
   outOfScopeSelected: Object.freeze({ weight: 2.5, opacity: 0.92, fillOpacity: 0.24, dashArray: "" }),
   outOfScopeDefault: Object.freeze({ weight: 1.05, opacity: 0.3, fillOpacity: 0.008, dashArray: "" }),
+});
+const BORDER_PRESETS = Object.freeze({
+  default: Object.freeze({
+    shiku: Object.freeze({ width: 2.9, opacity: 0.86, style: "solid", color: "#44566c" }),
+    block: Object.freeze({ width: 1.0, opacity: 0.86, style: "solid", color: "#44566c" }),
+    fill: Object.freeze({ inScope: 1.0, outOfScope: 1.0 }),
+  }),
+  thin: Object.freeze({
+    shiku: Object.freeze({ width: 1.8, opacity: 0.62, style: "solid", color: "#5f6f82" }),
+    block: Object.freeze({ width: 0.72, opacity: 0.62, style: "solid", color: "#5f6f82" }),
+    fill: Object.freeze({ inScope: 0.85, outOfScope: 0.8 }),
+  }),
+  bold: Object.freeze({
+    shiku: Object.freeze({ width: 3.6, opacity: 0.95, style: "solid", color: "#2f4056" }),
+    block: Object.freeze({ width: 1.45, opacity: 0.95, style: "solid", color: "#2f4056" }),
+    fill: Object.freeze({ inScope: 1.12, outOfScope: 1.12 }),
+  }),
+  "high-contrast": Object.freeze({
+    shiku: Object.freeze({ width: 3.0, opacity: 1.0, style: "solid", color: "#111827" }),
+    block: Object.freeze({ width: 1.35, opacity: 1.0, style: "solid", color: "#111827" }),
+    fill: Object.freeze({ inScope: 1.0, outOfScope: 1.25 }),
+  }),
 });
 
 const state = {
@@ -119,6 +143,14 @@ const state = {
   resizeTimerId: null,
   renderSwitchTimerId: null,
   prewarmTimerId: null,
+  borderSettings: createBorderSettingsFromPreset("default"),
+  borderUiRefresh: {
+    timerId: null,
+    rafId: null,
+    queuedKinds: { shiku: false, block: false },
+    lastRunAt: 0,
+  },
+  dirtyStyleModes: new Set(),
 };
 
 const el = {
@@ -136,6 +168,23 @@ const el = {
   loadingStepPolygons: document.getElementById("loading-step-polygons"),
   basemapInputs: [...document.querySelectorAll('input[name="basemap"]')],
   prefectureVisibilityInputs: [...document.querySelectorAll('input[name="prefecture-visibility"]')],
+  borderPreset: document.getElementById("border-preset"),
+  shikuWidth: document.getElementById("shiku-width"),
+  shikuWidthValue: document.getElementById("shiku-width-value"),
+  shikuOpacity: document.getElementById("shiku-opacity"),
+  shikuOpacityValue: document.getElementById("shiku-opacity-value"),
+  shikuStyle: document.getElementById("shiku-style"),
+  shikuColor: document.getElementById("shiku-color"),
+  blockWidth: document.getElementById("block-width"),
+  blockWidthValue: document.getElementById("block-width-value"),
+  blockOpacity: document.getElementById("block-opacity"),
+  blockOpacityValue: document.getElementById("block-opacity-value"),
+  blockStyle: document.getElementById("block-style"),
+  blockColor: document.getElementById("block-color"),
+  fillInScope: document.getElementById("fill-inscope"),
+  fillInScopeValue: document.getElementById("fill-inscope-value"),
+  fillOutOfScope: document.getElementById("fill-outscope"),
+  fillOutOfScopeValue: document.getElementById("fill-outscope-value"),
 };
 
 init();
@@ -151,6 +200,7 @@ async function init() {
 
   initDepotMarkers();
   setupEventHandlers();
+  initBorderSettingsUi();
   initResponsiveSidebarMode();
 
   void loadInScopeMunicipalities();
@@ -227,6 +277,158 @@ function setupEventHandlers() {
   state.map.on("click", handleMapClickFallback);
 
   updateHistoryButtons();
+}
+
+function initBorderSettingsUi() {
+  syncBorderSettingsUiFromState();
+  setupBorderSettingsHandlers();
+}
+
+function setupBorderSettingsHandlers() {
+  if (el.borderPreset) {
+    el.borderPreset.addEventListener("change", () => {
+      applyBorderPreset(el.borderPreset.value);
+    });
+  }
+
+  bindRangeControl(el.shikuWidth, (value) => {
+    state.borderSettings.shiku.width = clamp(toNumber(value, state.borderSettings.shiku.width), 0.2, 3.0);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ shiku: true });
+  });
+  bindRangeControl(el.shikuOpacity, (value) => {
+    state.borderSettings.shiku.opacity = clamp(toNumber(value, state.borderSettings.shiku.opacity), 0, 1);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ shiku: true });
+  });
+  bindSelectControl(el.shikuStyle, (value) => {
+    state.borderSettings.shiku.style = normalizeBorderStyle(value);
+    scheduleBorderRefresh({ shiku: true });
+  });
+  bindColorControl(el.shikuColor, (value) => {
+    state.borderSettings.shiku.color = normalizeColor(value, state.borderSettings.shiku.color);
+    scheduleBorderRefresh({ shiku: true });
+  });
+
+  bindRangeControl(el.blockWidth, (value) => {
+    state.borderSettings.block.width = clamp(toNumber(value, state.borderSettings.block.width), 0.2, 3.0);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ block: true });
+  });
+  bindRangeControl(el.blockOpacity, (value) => {
+    state.borderSettings.block.opacity = clamp(toNumber(value, state.borderSettings.block.opacity), 0, 1);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ block: true });
+  });
+  bindSelectControl(el.blockStyle, (value) => {
+    state.borderSettings.block.style = normalizeBorderStyle(value);
+    scheduleBorderRefresh({ block: true });
+  });
+  bindColorControl(el.blockColor, (value) => {
+    state.borderSettings.block.color = normalizeColor(value, state.borderSettings.block.color);
+    scheduleBorderRefresh({ block: true });
+  });
+
+  bindRangeControl(el.fillInScope, (value) => {
+    state.borderSettings.fill.inScope = clamp(toNumber(value, state.borderSettings.fill.inScope), 0, 1);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ block: true });
+  });
+  bindRangeControl(el.fillOutOfScope, (value) => {
+    state.borderSettings.fill.outOfScope = clamp(toNumber(value, state.borderSettings.fill.outOfScope), 0, 1);
+    renderBorderSettingsValueLabels();
+    scheduleBorderRefresh({ block: true });
+  });
+}
+
+function bindRangeControl(node, onValue) {
+  if (!node) {
+    return;
+  }
+  const handler = () => onValue(node.value);
+  node.addEventListener("input", handler);
+  node.addEventListener("change", handler);
+}
+
+function bindSelectControl(node, onValue) {
+  if (!node) {
+    return;
+  }
+  node.addEventListener("change", () => onValue(node.value));
+}
+
+function bindColorControl(node, onValue) {
+  if (!node) {
+    return;
+  }
+  const handler = () => onValue(node.value);
+  node.addEventListener("input", handler);
+  node.addEventListener("change", handler);
+}
+
+function applyBorderPreset(presetKey) {
+  state.borderSettings = createBorderSettingsFromPreset(presetKey);
+  syncBorderSettingsUiFromState();
+  scheduleBorderRefresh({ shiku: true, block: true });
+}
+
+function syncBorderSettingsUiFromState() {
+  const settings = state.borderSettings;
+  if (el.borderPreset) {
+    el.borderPreset.value = settings.preset;
+  }
+  if (el.shikuWidth) {
+    el.shikuWidth.value = String(settings.shiku.width);
+  }
+  if (el.shikuOpacity) {
+    el.shikuOpacity.value = String(settings.shiku.opacity);
+  }
+  if (el.shikuStyle) {
+    el.shikuStyle.value = settings.shiku.style;
+  }
+  if (el.shikuColor) {
+    el.shikuColor.value = settings.shiku.color;
+  }
+  if (el.blockWidth) {
+    el.blockWidth.value = String(settings.block.width);
+  }
+  if (el.blockOpacity) {
+    el.blockOpacity.value = String(settings.block.opacity);
+  }
+  if (el.blockStyle) {
+    el.blockStyle.value = settings.block.style;
+  }
+  if (el.blockColor) {
+    el.blockColor.value = settings.block.color;
+  }
+  if (el.fillInScope) {
+    el.fillInScope.value = String(settings.fill.inScope);
+  }
+  if (el.fillOutOfScope) {
+    el.fillOutOfScope.value = String(settings.fill.outOfScope);
+  }
+  renderBorderSettingsValueLabels();
+}
+
+function renderBorderSettingsValueLabels() {
+  if (el.shikuWidthValue) {
+    el.shikuWidthValue.textContent = state.borderSettings.shiku.width.toFixed(1);
+  }
+  if (el.shikuOpacityValue) {
+    el.shikuOpacityValue.textContent = state.borderSettings.shiku.opacity.toFixed(2);
+  }
+  if (el.blockWidthValue) {
+    el.blockWidthValue.textContent = state.borderSettings.block.width.toFixed(2);
+  }
+  if (el.blockOpacityValue) {
+    el.blockOpacityValue.textContent = state.borderSettings.block.opacity.toFixed(2);
+  }
+  if (el.fillInScopeValue) {
+    el.fillInScopeValue.textContent = state.borderSettings.fill.inScope.toFixed(2);
+  }
+  if (el.fillOutOfScopeValue) {
+    el.fillOutOfScopeValue.textContent = state.borderSettings.fill.outOfScope.toFixed(2);
+  }
 }
 
 function scheduleRenderModeSwitch() {
@@ -845,6 +1047,7 @@ function loadGeoJson(data, options = {}) {
 
   state.loadedGeoData = data;
   state.lastZoomForModeSwitch = state.map?.getZoom?.() ?? state.lastZoomForModeSwitch;
+  clearBorderRefreshQueue(true);
 
   removeGeoLayersFromMap();
   state.geoLayerLite = null;
@@ -1004,6 +1207,10 @@ function activateLayer(mode) {
   state.renderMode = normalizedMode;
   state.lastZoomForModeSwitch = state.map?.getZoom?.() ?? state.lastZoomForModeSwitch;
   state.areaToLayers = normalizedMode === "detail" ? state.areaToLayersDetail : state.areaToLayersLite;
+  if (state.dirtyStyleModes.has(normalizedMode)) {
+    refreshStylesForMode(normalizedMode);
+    state.dirtyStyleModes.delete(normalizedMode);
+  }
 
   state.municipalityBoundaryLayer?.bringToFront();
   bringDepotMarkersToFront();
@@ -1587,50 +1794,33 @@ function styleForArea(areaId, mode = state.renderMode) {
   const baseColor = depot ? depot.color : "#9ea8b6";
   const isOutOfScope = !isInScopeArea(areaId);
   const fujScale = assignment === "FUJ" ? 1.3 : 1;
-
-  if (mode === "lite") {
-    const style = isOutOfScope
-      ? selected
-        ? LITE_STYLE.outOfScopeSelected
-        : LITE_STYLE.outOfScopeDefault
-      : selected
-        ? LITE_STYLE.selected
-        : LITE_STYLE.default;
-    return {
-      color: isOutOfScope ? "#6b7280" : selected ? "#334155" : "#4f6278",
-      weight: style.weight,
-      dashArray: "",
-      fillColor: isOutOfScope ? "#8f98a5" : baseColor,
-      fillOpacity: isOutOfScope ? style.fillOpacity : Math.min(0.4, style.fillOpacity * fujScale),
-      opacity: style.opacity,
-    };
-  }
-
-  if (isOutOfScope && selected) {
-    const style = DETAIL_STYLE.outOfScopeSelected;
-    return {
-      color: "#334155",
-      weight: style.weight,
-      dashArray: style.dashArray,
-      fillColor: "#8f98a5",
-      fillOpacity: style.fillOpacity,
-      opacity: style.opacity,
-    };
-  }
-
+  const styleSet = mode === "lite" ? LITE_STYLE : DETAIL_STYLE;
   const style = isOutOfScope
-    ? DETAIL_STYLE.outOfScopeDefault
+    ? selected
+      ? styleSet.outOfScopeSelected
+      : styleSet.outOfScopeDefault
     : selected
-      ? DETAIL_STYLE.selected
-      : DETAIL_STYLE.default;
-
+      ? styleSet.selected
+      : styleSet.default;
+  const defaultStyle = isOutOfScope ? styleSet.outOfScopeDefault : styleSet.default;
+  const weightScale = defaultStyle.weight > 0 ? style.weight / defaultStyle.weight : 1;
+  const opacityScale = defaultStyle.opacity > 0 ? style.opacity / defaultStyle.opacity : 1;
+  const block = state.borderSettings.block;
+  const fillScale = isOutOfScope ? state.borderSettings.fill.outOfScope : state.borderSettings.fill.inScope;
+  const dashArray = BORDER_STYLE_DASH[normalizeBorderStyle(block.style)];
+  const baseFillOpacity = isOutOfScope
+    ? style.fillOpacity
+    : mode === "lite"
+      ? Math.min(0.4, style.fillOpacity * fujScale)
+      : Math.min(0.5, style.fillOpacity * fujScale);
+  const fillColor = isOutOfScope && (mode === "lite" || selected) ? "#8f98a5" : baseColor;
   return {
-    color: isOutOfScope ? "#6b7280" : selected ? "#0f1720" : "#44566c",
-    weight: style.weight,
-    dashArray: style.dashArray,
-    fillColor: baseColor,
-    fillOpacity: isOutOfScope ? style.fillOpacity : Math.min(0.5, style.fillOpacity * fujScale),
-    opacity: style.opacity,
+    color: normalizeColor(block.color, "#44566c"),
+    weight: clamp(block.width * weightScale, 0.2, 6),
+    dashArray,
+    fillColor,
+    fillOpacity: clamp(baseFillOpacity * fillScale, 0, 1),
+    opacity: clamp(block.opacity * opacityScale, 0, 1),
   };
 }
 
@@ -1679,10 +1869,12 @@ async function drawMunicipalityBoundaryLayer(fallbackData) {
 }
 
 function getMunicipalityBoundaryStyle() {
+  const shiku = state.borderSettings.shiku;
   return {
-    color: "#44566c",
-    weight: 2.9,
-    opacity: 0.86,
+    color: normalizeColor(shiku.color, "#44566c"),
+    weight: clamp(toNumber(shiku.width, 2.9), 0.2, 6),
+    dashArray: BORDER_STYLE_DASH[normalizeBorderStyle(shiku.style)],
+    opacity: clamp(toNumber(shiku.opacity, 0.86), 0, 1),
     fillOpacity: 0,
     interactive: false,
   };
@@ -1717,11 +1909,76 @@ async function getMunicipalityBoundarySource() {
   return null;
 }
 
-function refreshAllStyles() {
-  state.areaToLayers.forEach((layers, areaId) => {
-    const mode = state.areaToLayers === state.areaToLayersDetail ? "detail" : "lite";
-    layers.forEach((layer) => layer.setStyle(styleForArea(areaId, mode)));
+function refreshStylesForMode(mode) {
+  const normalizedMode = mode === "detail" ? "detail" : "lite";
+  const layerMap = normalizedMode === "detail" ? state.areaToLayersDetail : state.areaToLayersLite;
+  layerMap.forEach((layers, areaId) => {
+    layers.forEach((layer) => layer.setStyle(styleForArea(areaId, normalizedMode)));
   });
+}
+
+function refreshAllStyles() {
+  refreshStylesForMode("detail");
+  refreshStylesForMode("lite");
+}
+
+function scheduleBorderRefresh(kinds = {}) {
+  if (kinds.shiku) {
+    state.borderUiRefresh.queuedKinds.shiku = true;
+  }
+  if (kinds.block) {
+    state.borderUiRefresh.queuedKinds.block = true;
+  }
+  if (!state.borderUiRefresh.queuedKinds.shiku && !state.borderUiRefresh.queuedKinds.block) {
+    return;
+  }
+  if (state.borderUiRefresh.timerId || state.borderUiRefresh.rafId) {
+    return;
+  }
+  const elapsed = Date.now() - state.borderUiRefresh.lastRunAt;
+  const delay = Math.max(0, BORDER_REFRESH_THROTTLE_MS - elapsed);
+  state.borderUiRefresh.timerId = setTimeout(() => {
+    state.borderUiRefresh.timerId = null;
+    state.borderUiRefresh.rafId = requestAnimationFrame(() => {
+      state.borderUiRefresh.rafId = null;
+      runBorderRefresh();
+    });
+  }, delay);
+}
+
+function runBorderRefresh() {
+  const queued = state.borderUiRefresh.queuedKinds;
+  const applyShiku = Boolean(queued.shiku);
+  const applyBlock = Boolean(queued.block);
+  state.borderUiRefresh.queuedKinds = { shiku: false, block: false };
+  state.borderUiRefresh.lastRunAt = Date.now();
+
+  if (applyShiku) {
+    state.municipalityBoundaryLayer?.setStyle(getMunicipalityBoundaryStyle());
+  }
+  if (applyBlock) {
+    const currentMode = state.renderMode === "detail" ? "detail" : "lite";
+    const inactiveMode = currentMode === "detail" ? "lite" : "detail";
+    refreshStylesForMode(currentMode);
+    state.dirtyStyleModes.delete(currentMode);
+    state.dirtyStyleModes.add(inactiveMode);
+  }
+}
+
+function clearBorderRefreshQueue(clearDirty = false) {
+  if (state.borderUiRefresh.timerId) {
+    clearTimeout(state.borderUiRefresh.timerId);
+    state.borderUiRefresh.timerId = null;
+  }
+  if (state.borderUiRefresh.rafId) {
+    cancelAnimationFrame(state.borderUiRefresh.rafId);
+    state.borderUiRefresh.rafId = null;
+  }
+  state.borderUiRefresh.queuedKinds.shiku = false;
+  state.borderUiRefresh.queuedKinds.block = false;
+  if (clearDirty) {
+    state.dirtyStyleModes.clear();
+  }
 }
 
 function applyAreaStyle(areaId) {
@@ -2026,4 +2283,34 @@ function renderSelected() {
     chip.addEventListener("click", () => toggleAreaSelection(areaId));
     el.selectedAreas.append(chip);
   });
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function toNumber(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeBorderStyle(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "dashed" || raw === "dotted" ? raw : "solid";
+}
+
+function normalizeColor(value, fallback = "#44566c") {
+  const raw = String(value || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw : fallback;
+}
+
+function createBorderSettingsFromPreset(presetKey = "default") {
+  const key = BORDER_PRESETS[presetKey] ? presetKey : "default";
+  const preset = BORDER_PRESETS[key];
+  return {
+    preset: key,
+    shiku: { ...preset.shiku },
+    block: { ...preset.block },
+    fill: { ...preset.fill },
+  };
 }

@@ -226,6 +226,91 @@ h2 {
   margin: 0;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-label {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #4d5665;
+  font-weight: 600;
+}
+
+.settings-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-value {
+  font-size: 11px;
+  color: #596273;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-select {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 8px;
+  border: 1px solid #d3d9e4;
+  background: #ffffff;
+  color: #1f2530;
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 500;
+}
+
+.settings-accordion {
+  border: 1px solid #dbe1ea;
+  border-radius: 10px;
+  padding: 6px 9px 9px;
+  background: #fbfcfe;
+}
+
+.settings-accordion > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.settings-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-accordion[open] > summary {
+  margin-bottom: 7px;
+}
+
+.settings-accordion .settings-row + .settings-row {
+  margin-top: 6px;
+}
+
+.settings-accordion input[type="color"] {
+  width: 44px;
+  height: 28px;
+  border: 1px solid #d3d9e4;
+  border-radius: 7px;
+  padding: 0;
+  background: #ffffff;
+}
+
 input,
 select,
 button {
@@ -690,5 +775,18 @@ button.ghost.danger {
   .chip-sub,
   .chip-meta {
     font-size: 11px;
+  }
+
+  .settings-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .settings-label {
+    font-size: 11px;
+  }
+
+  .settings-value {
+    min-width: 32px;
   }
 }
