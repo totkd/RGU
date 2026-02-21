@@ -50,33 +50,47 @@
 
 ### 公開URL / デプロイ先
 - Production: [https://rgu-chi.vercel.app/](https://rgu-chi.vercel.app/)
+- Development: `areakit-dev` プロジェクトのURL（Vercelで採番）
 - Hosting: Vercel（Static）
+- Cost: Vercel Hobbyで無料開始可（無料枠あり）。チーム機能や利用量増加時は有料化の可能性あり。
 
-### Vercel運用（標準）
+### Vercel運用（prod/dev分離）
+
+#### 分離構成
+- `AreaKit-prod`（既存本番）: Production Branch = `main`
+- `AreaKit-dev`（新規開発）: Production Branch = `develop`
+- 両方とも GitHub リポジトリ `totkd/AreaKit` を参照
 
 #### 反映の流れ
-1. GitHubへpush
-2. Vercelが自動デプロイ
-3. `main` へ反映された変更がProductionに適用
-
-#### 推奨ワークフロー
-1. 作業ブランチをpush
+1. 作業ブランチを `develop` 向けにPR
 2. Vercel Preview URLで確認
-3. PR作成・レビュー
-4. `main` マージで本番反映
+3. `develop` マージで `AreaKit-dev` に反映
+4. `develop -> main` PRを作成してレビュー
+5. `main` マージで `AreaKit-prod`（本番）に反映
 
 #### 初回セットアップ要点
-- VercelでGitHubリポジトリ `totkd/AreaKit` をImport
-- Framework Preset: `Other`
-- Root Directory: `./`
-- Build Command: なし
-- Output Directory: なし（静的配信）
-- Environment Variables: 不要
+- 共通設定
+  - Framework Preset: `Other`
+  - Root Directory: `./`
+  - Build Command: なし
+  - Output Directory: なし（静的配信）
+  - Environment Variables: 不要
+- `AreaKit-prod`
+  - 既存プロジェクト（`rgu-chi.vercel.app`）
+  - Production Branch: `main`
+- `AreaKit-dev`
+  - 同一リポジトリ `totkd/AreaKit` から新規Import
+  - Project Name: `areakit-dev`
+  - Production Branch: `develop`
 
 #### キャッシュ戦略（`vercel.json`）
 - `/index.html`: `no-cache, no-store, must-revalidate`
 - `/app.js`, `/styles.css`: `max-age=300`
 - `/data/*.geojson`, `/data/*.csv`: `max-age=60`
+
+#### 運用ガード
+- `main` は原則PR経由のみ更新（直接push禁止）
+- 検証は `AreaKit-dev` で完了後に `main` へ昇格
 
 ---
 
