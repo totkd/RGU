@@ -37,6 +37,13 @@
 - `Zone Select`: 選択件数・割当操作・Undo / Redo・All Reset
 - `Selected Zones`: 現在選択中の町域一覧
 
+### 追加した登録不要タイル
+- `OSM Humanitarian`
+- `地理院 白地図`
+- `地理院 色別標高図`
+- 方針: APIキー登録・課金情報登録なしで利用可能な公開タイルのみ追加
+- 注意: すべてのタイルで帰属表示（attribution）を維持する
+
 ### CSV出力列
 - `area_id`
 - `area_name`
@@ -97,6 +104,7 @@
 ### 現行仕様（実装）
 - 起動時に `data/asis_fine_polygons.geojson` を自動読込
 - 既定ベースマップは `Esri ワールドストリート`
+- Map Tiles は登録不要タイルを優先採用（APIキー必須ベンダは未導入）
 - 既定表示都県は `神奈川県` と `東京都`（`Polygon Visibility`で切替）
 - `Undo / Redo` は**選択履歴**を管理（割当履歴ではない）
 - `All Reset` は初期割当復元 + 選択解除 + 履歴初期化
